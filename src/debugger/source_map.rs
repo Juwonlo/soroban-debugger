@@ -36,29 +36,14 @@ impl SourceMap {
             .map_err(|e| DebuggerError::WasmLoadError(format!("Failed to parse WASM object file: {}", e)))?;
 
         let load_section =
-            |id: gimli::SectionId| -> Result<EndianSlice<RunTimeEndian>, gimli::Error> {
-                let section = obj.section_by_name(id.name()).unwrap_or_else(|| {
-                    obj.section_by_name(&format!(".{}", id.name()))
-                        .unwrap_or_else(|| object::Section {
-                            index: object::SectionIndex(0),
-                            id: object::SectionId(0),
-                            name: id.name(),
-                            segment: None,
-                            address: 0,
-                            size: 0,
-                            align: 0,
-                            data_range: None,
-                            data: &[],
-                            relocations: Vec::new(),
-                            flags: object::SectionFlags::None,
-                            symbol_index: None,
-                            kind: object::SectionKind::Other,
-                        })
-                });
-                Ok(EndianSlice::new(
-                    section.data().unwrap_or(&[]),
-                    RunTimeEndian::Little,
-                ))
+            |id: gimli::SectionId| -> std::result::Result<EndianSlice<RunTimeEndian>, gimli::Error> {
+                let data = obj
+                    .section_by_name(id.name())
+                    .or_else(|| obj.section_by_name(&format!(".{}", id.name())))
+                    .and_then(|section| section.data().ok())
+                    .unwrap_or(&[]);
+
+                Ok(EndianSlice::new(data, RunTimeEndian::Little))
             };
 
         let dwarf = Dwarf::load(&load_section)
@@ -79,7 +64,10 @@ impl SourceMap {
                         // In WASM, DWARF addresses are usually offsets into the code section
                         let offset = row.address() as usize;
                         let line = row.line().map(|l| l.get() as u32).unwrap_or(0);
-                        let column = row.column().column().map(|c| c.get() as u32);
+                        let column = match row.column() {
+                            gimli::ColumnType::LeftEdge => None,
+                            gimli::ColumnType::Column(column) => Some(column.get() as u32),
+                        };
 
                         self.offsets.insert(
                             offset,
