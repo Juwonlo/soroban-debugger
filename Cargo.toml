@@ -56,8 +56,6 @@ crossterm = "0.27"
 # WASM parsing
 wasmparser = "0.121"
 walrus = "0.20"
-gimli = "0.32"
-object = "0.37"
 
 # Error handling
 anyhow = "1.0"

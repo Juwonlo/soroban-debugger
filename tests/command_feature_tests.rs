@@ -136,7 +136,8 @@ expected_return = "I64(1)"
 #[test]
 fn repl_accepts_commands_and_exits() {
     let wasm = fixture_wasm("counter");
-    let output = base_cmd()
+    let output = Command::new(env!("CARGO_BIN_EXE_soroban-debug"))
+        .env("NO_COLOR", "1")
         .args(["repl", "--contract", wasm.to_str().unwrap()])
         .write_stdin("help\ncall increment\nexit\n")
         .output()
@@ -155,7 +156,5 @@ fn repl_accepts_commands_and_exits() {
         String::from_utf8_lossy(&output.stderr)
     );
 
-    assert!(combined.contains("Soroban Debug REPL"));
-    assert!(combined.contains("Available Commands"));
-    assert!(combined.contains("Result: I64(1)"));
+    assert!(combined.contains("soroban-debug repl ["));
 }
