@@ -531,6 +531,8 @@ mod tests {
                             selected_version: PROTOCOL_MAX_VERSION,
                             server_name: "test-server".to_string(),
                             server_version: "0.0.0".to_string(),
+                            protocol_min: PROTOCOL_MIN_VERSION,
+                            protocol_max: PROTOCOL_MAX_VERSION,
                         },
                     ),
                     DebugRequest::Ping => DebugMessage::response(request.id, DebugResponse::Pong),

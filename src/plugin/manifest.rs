@@ -239,6 +239,7 @@ mod tests {
             capabilities: PluginCapabilities::default(),
             library: "test.so".to_string(),
             dependencies: vec![],
+            signature: None,
         };
 
         assert!(manifest.validate().is_err());
