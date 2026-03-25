@@ -267,6 +267,11 @@ fn main() -> miette::Result<()> {
                 soroban_debugger::cli::commands::show_budget_trend(
                     cli.trend_contract.as_deref(),
                     cli.trend_function.as_deref(),
+                    soroban_debugger::history::RegressionConfig {
+                        threshold_pct: cli.trend_regression_threshold_pct,
+                        lookback: cli.trend_regression_lookback,
+                        smoothing_window: cli.trend_regression_smoothing,
+                    },
                 )
             } else {
                 let mut cmd = Cli::command();

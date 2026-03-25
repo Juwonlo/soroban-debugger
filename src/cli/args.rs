@@ -99,6 +99,18 @@ pub struct Cli {
     #[arg(long)]
     pub trend_function: Option<String>,
 
+    /// Regression threshold percentage for `--budget-trend` warnings
+    #[arg(long, default_value_t = 10.0, value_name = "PCT", value_parser = clap::value_parser!(f64).range(0.0..))]
+    pub trend_regression_threshold_pct: f64,
+
+    /// Lookback window (number of runs) for `--budget-trend` regression detection
+    #[arg(long, default_value_t = 2, value_name = "N", value_parser = clap::value_parser!(usize).range(2..))]
+    pub trend_regression_lookback: usize,
+
+    /// Smoothing window (moving average) for `--budget-trend` regression detection (1 disables smoothing)
+    #[arg(long, default_value_t = 1, value_name = "N", value_parser = clap::value_parser!(usize).range(1..))]
+    pub trend_regression_smoothing: usize,
+
     #[command(subcommand)]
     pub command: Option<Commands>,
 

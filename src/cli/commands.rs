@@ -1858,7 +1858,11 @@ pub async fn repl(args: ReplArgs) -> Result<()> {
 }
 
 /// Show budget trend chart
-pub fn show_budget_trend(contract: Option<&str>, function: Option<&str>) -> Result<()> {
+pub fn show_budget_trend(
+    contract: Option<&str>,
+    function: Option<&str>,
+    regression: crate::history::RegressionConfig,
+) -> Result<()> {
     let manager = HistoryManager::new()?;
     let mut records = manager.filter_history(contract, function)?;
 
@@ -1895,6 +1899,10 @@ pub fn show_budget_trend(contract: Option<&str>, function: Option<&str>) -> Resu
             contract.unwrap_or("*"),
             function.unwrap_or("*")
         );
+        println!(
+            "Regression params: threshold>{:.1}% lookback={} smoothing={}",
+            regression.threshold_pct, regression.lookback, regression.smoothing_window
+        );
         println!("Runs: {}   Range: {} -> {}", stats.count, stats.first_date, stats.last_date);
         println!(
             "CPU insns: last={}  avg={}  min={}  max={}",
@@ -1914,10 +1922,12 @@ pub fn show_budget_trend(contract: Option<&str>, function: Option<&str>) -> Resu
         println!("CPU trend: {}", Formatter::sparkline(&cpu_values, 50));
         println!("MEM trend: {}", Formatter::sparkline(&mem_values, 50));
 
-        if let Some((cpu_reg, mem_reg)) = crate::history::check_regression(&records) {
+        if let Some((cpu_reg, mem_reg)) =
+            crate::history::check_regression_with_config(&records, &regression)
+        {
             if cpu_reg > 0.0 || mem_reg > 0.0 {
                 println!();
-                println!("Regression warning (last two runs):");
+                println!("Regression warning (latest vs baseline):");
                 if cpu_reg > 0.0 {
                     println!("  CPU increased by {:.1}%", cpu_reg);
                 }

@@ -306,30 +306,99 @@ impl HistoryManager {
 
 /// Calculate the delta between the last two runs. Returns percentage increase if >10%.
 pub fn check_regression(records: &[RunHistory]) -> Option<(f64, f64)> {
+    check_regression_with_config(records, &RegressionConfig::default())
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct RegressionConfig {
+    /// Percentage threshold above which we consider a regression.
+    ///
+    /// Example: `10.0` means "warn if latest is >10% higher than baseline".
+    pub threshold_pct: f64,
+    /// Number of most-recent records to consider for regression detection.
+    ///
+    /// The baseline is computed from the previous `lookback - 1` runs, and compared to the latest.
+    pub lookback: usize,
+    /// Trailing smoothing window size (moving average) applied to the series before regression detection.
+    ///
+    /// `1` disables smoothing.
+    pub smoothing_window: usize,
+}
+
+impl Default for RegressionConfig {
+    fn default() -> Self {
+        Self {
+            threshold_pct: 10.0,
+            lookback: 2,
+            smoothing_window: 1,
+        }
+    }
+}
+
+fn smooth_trailing(values: &[u64], window: usize) -> Vec<f64> {
+    let window = window.max(1);
+    let mut out = Vec::with_capacity(values.len());
+    for i in 0..values.len() {
+        let start = i.saturating_sub(window - 1);
+        let mut sum: u128 = 0;
+        let mut count: u128 = 0;
+        for v in &values[start..=i] {
+            sum = sum.saturating_add(*v as u128);
+            count += 1;
+        }
+        out.push((sum as f64) / (count as f64));
+    }
+    out
+}
+
+/// Check for CPU and memory regressions using a configurable lookback window and smoothing.
+///
+/// Returns `(cpu_pct, mem_pct)` where each value is `> 0.0` only when it exceeds `threshold_pct`.
+pub fn check_regression_with_config(
+    records: &[RunHistory],
+    config: &RegressionConfig,
+) -> Option<(f64, f64)> {
     if records.len() < 2 {
         return None;
     }
 
+    let lookback = config.lookback.max(2);
+    let smoothing = config.smoothing_window.max(1);
+    let threshold = config.threshold_pct.max(0.0);
+
     let mut sorted: Vec<&RunHistory> = records.iter().collect();
     sorted.sort_by(|a, b| compare_run_history_date(a, b));
-    let latest = sorted[sorted.len() - 1];
-    let previous = sorted[sorted.len() - 2];
+
+    let window_len = sorted.len().min(lookback);
+    if window_len < 2 {
+        return None;
+    }
+
+    let window = &sorted[sorted.len() - window_len..];
+    let cpu_raw: Vec<u64> = window.iter().map(|r| r.cpu_used).collect();
+    let mem_raw: Vec<u64> = window.iter().map(|r| r.memory_used).collect();
+    let cpu = smooth_trailing(&cpu_raw, smoothing);
+    let mem = smooth_trailing(&mem_raw, smoothing);
+
+    let cpu_latest = cpu[cpu.len() - 1];
+    let mem_latest = mem[mem.len() - 1];
+
+    let cpu_baseline = cpu[..cpu.len() - 1].iter().sum::<f64>() / ((cpu.len() - 1) as f64);
+    let mem_baseline = mem[..mem.len() - 1].iter().sum::<f64>() / ((mem.len() - 1) as f64);
 
     let mut regression_cpu = 0.0;
     let mut regression_mem = 0.0;
 
-    if previous.cpu_used > 0 && latest.cpu_used > previous.cpu_used {
-        let diff = (latest.cpu_used - previous.cpu_used) as f64;
-        let p = (diff / previous.cpu_used as f64) * 100.0;
-        if p > 10.0 {
+    if cpu_baseline > 0.0 && cpu_latest > cpu_baseline {
+        let p = ((cpu_latest - cpu_baseline) / cpu_baseline) * 100.0;
+        if p > threshold {
             regression_cpu = p;
         }
     }
 
-    if previous.memory_used > 0 && latest.memory_used > previous.memory_used {
-        let diff = (latest.memory_used - previous.memory_used) as f64;
-        let p = (diff / previous.memory_used as f64) * 100.0;
-        if p > 10.0 {
+    if mem_baseline > 0.0 && mem_latest > mem_baseline {
+        let p = ((mem_latest - mem_baseline) / mem_baseline) * 100.0;
+        if p > threshold {
             regression_mem = p;
         }
     }
@@ -584,6 +653,74 @@ mod tests {
         let (cpu, mem) = regression.unwrap();
         assert_eq!(cpu, 15.0);
         assert_eq!(mem, 0.0);
+    }
+
+    #[test]
+    fn regression_threshold_is_configurable() {
+        let p1 = make_record("2026-01-01T00:00:00Z", 1000, 1000);
+        let p2 = make_record("2026-01-02T00:00:00Z", 1150, 1050); // +15% cpu, +5% mem
+        let records = vec![p1, p2];
+
+        let cfg = RegressionConfig {
+            threshold_pct: 20.0,
+            lookback: 2,
+            smoothing_window: 1,
+        };
+        assert!(check_regression_with_config(&records, &cfg).is_none());
+    }
+
+    #[test]
+    fn regression_lookback_window_changes_baseline() {
+        // With lookback=2: baseline=140 -> latest=150 => ~7.14% (no regression for threshold 10%)
+        // With lookback=4: baseline=avg(100,120,140)=120 -> latest=150 => 25% (regression)
+        let records = vec![
+            make_record("2026-01-01", 100, 100),
+            make_record("2026-01-02", 120, 100),
+            make_record("2026-01-03", 140, 100),
+            make_record("2026-01-04", 150, 100),
+        ];
+
+        let cfg_short = RegressionConfig {
+            threshold_pct: 10.0,
+            lookback: 2,
+            smoothing_window: 1,
+        };
+        assert!(check_regression_with_config(&records, &cfg_short).is_none());
+
+        let cfg_long = RegressionConfig {
+            threshold_pct: 10.0,
+            lookback: 4,
+            smoothing_window: 1,
+        };
+        let (cpu, mem) = check_regression_with_config(&records, &cfg_long).unwrap();
+        assert!(cpu > 20.0 && cpu < 30.0, "expected ~25%, got {cpu}");
+        assert_eq!(mem, 0.0);
+    }
+
+    #[test]
+    fn regression_smoothing_can_reduce_noise() {
+        // Without smoothing, latest=200 vs baseline avg(100,200,100)=133.33 => 50% regression.
+        // With smoothing_window=3, the smoothed baseline/last reduce the delta below 40%.
+        let records = vec![
+            make_record("2026-01-01", 100, 0),
+            make_record("2026-01-02", 200, 0),
+            make_record("2026-01-03", 100, 0),
+            make_record("2026-01-04", 200, 0),
+        ];
+
+        let cfg_raw = RegressionConfig {
+            threshold_pct: 40.0,
+            lookback: 4,
+            smoothing_window: 1,
+        };
+        assert!(check_regression_with_config(&records, &cfg_raw).is_some());
+
+        let cfg_smooth = RegressionConfig {
+            threshold_pct: 40.0,
+            lookback: 4,
+            smoothing_window: 3,
+        };
+        assert!(check_regression_with_config(&records, &cfg_smooth).is_none());
     }
 
     #[test]
