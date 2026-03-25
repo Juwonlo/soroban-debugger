@@ -228,8 +228,9 @@ async function main(): Promise<void> {
   const sourcePath = path.join(repoRoot, 'tests', 'fixtures', 'contracts', 'echo', 'src', 'lib.rs');
   const exportedFunctions = await debuggerProcess.getContractFunctions();
   const resolvedBreakpoints = resolveSourceBreakpoints(sourcePath, [10], exportedFunctions);
-  assert.equal(resolvedBreakpoints[0].verified, true, 'Expected echo breakpoint to resolve');
+  assert.equal(resolvedBreakpoints[0].verified, false, 'Expected heuristic source mapping to be unverified');
   assert.equal(resolvedBreakpoints[0].functionName, 'echo');
+  assert.equal(resolvedBreakpoints[0].setBreakpoint, true, 'Expected heuristic mapping to still set a function breakpoint');
 
   await debuggerProcess.setBreakpoint('echo');
   const paused = await debuggerProcess.execute();

@@ -19,6 +19,7 @@ Thank you for your interest in contributing to the **Soroban Debugger** project!
 11. [Project Structure](#project-structure)
 12. [Code of Conduct](#code-of-conduct)
 13. [Communication](#communication)
+14. [Release Process](#release-process)
 
 ---
 
@@ -362,3 +363,11 @@ We are committed to providing a welcoming and inclusive environment for everyone
 ---
 
 Thank you for helping make Soroban Debugger better!
+
+---
+
+## Release Process
+
+Releases are gated by a single unified checklist that covers Rust/CLI, analyzers, VS Code extension checks, and benchmark thresholds:
+
+- `docs/release-checklist.md`
