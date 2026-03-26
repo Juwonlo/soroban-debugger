@@ -1,9 +1,10 @@
+use crate::analyzer::security::{AnalyzerFilter, RuleMetadata, SecurityAnalyzer, Severity};
+use crate::analyzer::symbolic::{SymbolicAnalyzer, SymbolicConfig};
 use crate::analyzer::upgrade::{CompatibilityReport, ExecutionDiff, UpgradeAnalyzer};
-use crate::analyzer::{security::{AnalyzerFilter, SecurityAnalyzer, Severity}, symbolic::SymbolicAnalyzer};
 use crate::cli::args::{
     AnalyzeArgs, CompareArgs, HistoryPruneArgs, InspectArgs, InteractiveArgs, OptimizeArgs,
     ProfileArgs, RemoteArgs, ReplArgs, ReplayArgs, RunArgs, ScenarioArgs, ServerArgs, SymbolicArgs,
-    TuiArgs, UpgradeCheckArgs, Verbosity,
+    SymbolicProfile, TuiArgs, UpgradeCheckArgs, Verbosity,
 };
 use crate::debugger::engine::DebuggerEngine;
 use crate::debugger::instruction_pointer::StepMode;
@@ -19,6 +20,7 @@ use crate::ui::formatter::Formatter;
 use crate::ui::{run_dashboard, DebuggerUI};
 use crate::{DebuggerError, Result};
 use miette::WrapErr;
+use std::collections::HashMap;
 use std::fs;
 
 fn print_info(message: impl AsRef<str>) {
@@ -72,9 +74,11 @@ struct DynamicAnalysisMetadata {
 
 #[derive(serde::Serialize)]
 struct AnalyzeCommandOutput {
-    findings: Vec<crate::analyzer::security::SecurityFinding>,
-    dynamic_analysis: Option<DynamicAnalysisMetadata>,
-    warnings: Vec<String>,
+    pub schema_version: String,
+    pub findings: Vec<crate::analyzer::security::SecurityFinding>,
+    pub rules: HashMap<String, RuleMetadata>,
+    pub dynamic_analysis: Option<DynamicAnalysisMetadata>,
+    pub warnings: Vec<String>,
 }
 
 fn render_symbolic_report(report: &crate::analyzer::symbolic::SymbolicReport) -> String {
@@ -207,9 +211,9 @@ fn render_security_report(output: &AnalyzeCommandOutput) -> String {
 
 /// Run instruction-level stepping mode.
 fn run_instruction_stepping(
-    _engine: &mut DebuggerEngine,
-    _function: &str,
-    _args: Option<&str>,
+    engine: &mut DebuggerEngine,
+    function: &str,
+    args: Option<&str>,
 ) -> Result<()> {
     logging::log_display(
         "\n=== Instruction Stepping Mode ===",
@@ -943,6 +947,7 @@ pub fn run(args: RunArgs, verbosity: Verbosity) -> Result<()> {
 
     if args.is_json_output() {
         let mut output = serde_json::json!({
+            "schema_version": "1.0",
             "status": "success",
             "result": result,
             "sha256": wasm_hash,
@@ -1849,11 +1854,13 @@ pub fn server(args: ServerArgs) -> Result<()> {
     ));
     if args.token.is_some() {
         print_info("Token authentication enabled");
-        if token.trim().len() < 16 {
-            print_warning(
-                "Remote debug token is shorter than 16 characters. Prefer at least 16 characters \
-                 and ideally a random 32-byte token.",
-            );
+        if let Some(t) = &args.token {
+            if t.trim().len() < 16 {
+                print_warning(
+                    "Remote debug token is shorter than 16 characters. Prefer at least 16 characters \
+                     and ideally a random 32-byte token.",
+                );
+            }
         }
     } else {
         print_info("Token authentication disabled");
@@ -2167,7 +2174,9 @@ pub fn analyze(args: AnalyzeArgs, _verbosity: Verbosity) -> Result<()> {
         &filter,
     )?;
     let output = AnalyzeCommandOutput {
+        schema_version: "1.0".to_string(),
         findings: report.findings,
+        rules: report.rules,
         dynamic_analysis,
         warnings,
     };

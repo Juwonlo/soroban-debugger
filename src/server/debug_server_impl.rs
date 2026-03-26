@@ -37,15 +37,24 @@ impl DebugServer {
             .await
             .map_err(|e| crate::DebuggerError::ExecutionError(format!("Bind failed: {e}")))?;
 
-        loop {
-            let (stream, _) = listener.accept().await.map_err(|e| {
-                crate::DebuggerError::ExecutionError(format!("Accept failed: {e}"))
-            })?;
-            let token = self.token.clone();
-            tokio::spawn(async move {
-                let _ = handle_connection(stream, token).await;
-            });
-        }
+        let local = tokio::task::LocalSet::new();
+
+        local.run_until(async move {
+            loop {
+                let (stream, _) = listener.accept().await.map_err(|e| {
+                    crate::DebuggerError::ExecutionError(format!("Accept failed: {e}"))
+                })?;
+                let token = self.token.clone();
+                tokio::task::spawn_local(async move {
+                    let _ = handle_connection(stream, token).await;
+                });
+            }
+            // Add a reachable OK just in case the loop ever breaks (it currently doesn't)
+            #[allow(unreachable_code)]
+            Ok::<(), crate::DebuggerError>(())
+        }).await?;
+
+        Ok(())
     }
 }
 

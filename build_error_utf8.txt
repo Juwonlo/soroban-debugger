@@ -1,0 +1,2233 @@
+﻿cargo :    Compiling 
+syn v2.0.117
+At line:1 char:1
++ cargo check > 
+build_error.txt 2>&1
++ ~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~
+    + CategoryInfo    
+          : NotSpeci  
+  fied: (   Compili   
+ ng syn v2.0.117:S    
+tring) [], Remote    
+Exception
+    + FullyQualifiedE 
+   rrorId : NativeCo  
+  mmandError
+ 
+    Checking cfg-if 
+v1.0.4
+   Compiling serde 
+v1.0.228
+    Checking 
+windows-link v0.2.1
+   Compiling 
+serde_core v1.0.228
+    Checking 
+windows-sys v0.61.2
+    Checking 
+getrandom v0.2.17
+   Compiling zmij 
+v1.0.21
+    Checking typenum 
+v1.19.0
+   Compiling itoa 
+v1.0.18
+    Checking subtle 
+v2.6.1
+   Compiling strsim 
+v0.11.1
+    Checking 
+const-oid v0.9.6
+    Checking 
+rand_core v0.6.4
+   Compiling 
+serde_json v1.0.149
+    Checking smallvec 
+v1.15.1
+    Checking 
+once_cell v1.21.4
+   Compiling zerocopy 
+v0.8.47
+   Compiling 
+darling_core v0.23.0
+   Compiling semver 
+v1.0.27
+   Compiling 
+serde_derive v1.0.228
+   Compiling 
+zeroize_derive v1.4.3
+    Checking zeroize 
+v1.8.2
+    Checking 
+generic-array v0.14.9
+    Checking 
+block-buffer v0.10.4
+    Checking 
+crypto-common v0.1.6
+    Checking digest 
+v0.10.7
+   Compiling 
+darling_macro v0.23.0
+   Compiling 
+thiserror-impl v1.0.69
+    Checking 
+num-traits v0.2.19
+    Checking memchr 
+v2.8.0
+   Compiling darling 
+v0.23.0
+    Checking 
+equivalent v1.0.2
+   Compiling 
+serde_with_macros 
+v3.18.0
+    Checking either 
+v1.15.0
+   Compiling 
+rustc_version v0.4.1
+   Compiling 
+thiserror v1.0.69
+   Compiling 
+crate-git-revision 
+v0.0.6
+    Checking 
+ppv-lite86 v0.2.21
+   Compiling 
+getrandom v0.3.4
+   Compiling 
+stellar-strkey v0.0.9
+   Compiling 
+stellar-xdr v22.1.0
+   Compiling 
+data-encoding v2.10.0
+    Checking 
+hashbrown v0.16.1
+   Compiling 
+serde_with v3.18.0
+    Checking 
+rand_chacha v0.3.1
+    Checking indexmap 
+v2.13.0
+   Compiling hex 
+v0.4.3
+   Compiling ahash 
+v0.8.12
+   Compiling 
+escape-bytes v0.1.1
+    Checking rand 
+v0.8.5
+    Checking 
+windows_x86_64_msvc 
+v0.52.6
+    Checking 
+num-integer v0.1.46
+    Checking der 
+v0.7.10
+    Checking ff 
+v0.13.1
+    Checking base16ct 
+v0.2.0
+    Checking log 
+v0.4.29
+    Checking 
+static_assertions 
+v1.1.0
+    Checking sec1 
+v0.7.3
+   Compiling 
+itertools v0.10.5
+    Checking group 
+v0.13.0
+    Checking ark-std 
+v0.4.0
+    Checking 
+num-bigint v0.4.6
+    Checking 
+windows-targets 
+v0.52.6
+   Compiling 
+clap_derive v4.6.0
+    Checking 
+signature v2.2.0
+    Checking 
+crypto-bigint v0.5.5
+    Checking 
+scopeguard v1.2.0
+    Checking 
+cpufeatures v0.2.17
+   Compiling anstyle 
+v1.0.14
+   Compiling 
+once_cell_polyfill 
+v1.70.2
+   Compiling 
+utf8parse v0.2.2
+   Compiling 
+anstyle-parse v1.0.0
+   Compiling 
+anstyle-wincon v3.0.11
+    Checking 
+elliptic-curve v0.13.8
+    Checking lock_api 
+v0.4.14
+    Checking 
+ark-serialize v0.4.2
+    Checking 
+windows-sys v0.59.0
+    Checking 
+crossbeam-utils 
+v0.8.21
+    Checking 
+parking_lot_core 
+v0.9.12
+   Compiling 
+anstyle-query v1.1.5
+    Checking hmac 
+v0.12.1
+   Compiling 
+is_terminal_polyfill 
+v1.70.2
+   Compiling 
+colorchoice v1.0.5
+    Checking rfc6979 
+v0.4.0
+   Compiling anstream 
+v1.0.0
+    Checking libm 
+v0.2.16
+    Checking ark-ff 
+v0.4.2
+    Checking sha2 
+v0.10.9
+    Checking 
+hashbrown v0.13.2
+   Compiling 
+curve25519-dalek 
+v4.1.3
+    Checking 
+aho-corasick v1.1.4
+   Compiling 
+num-derive v0.4.2
+   Compiling 
+derive_arbitrary 
+v1.3.2
+    Checking 
+regex-syntax v0.8.10
+    Checking 
+indexmap-nostd v0.4.0
+    Checking 
+downcast-rs v1.2.1
+   Compiling clap_lex 
+v1.1.0
+    Checking ark-poly 
+v0.4.2
+   Compiling 
+clap_builder v4.6.0
+    Checking 
+regex-automata v0.4.14
+    Checking 
+wasmi_core v0.13.0
+    Checking 
+wasmparser-nostd 
+v0.100.2
+    Checking 
+arbitrary v1.3.2
+    Checking ecdsa 
+v0.16.9
+    Checking winapi 
+v0.3.9
+    Checking 
+windows_x86_64_msvc 
+v0.53.1
+   Compiling 
+soroban-env-common 
+v22.1.3
+   Compiling curve2551
+9-dalek-derive v0.1.1
+    Checking base64 
+v0.13.1
+    Checking 
+rustc-demangle v0.1.27
+    Checking 
+pin-project-lite 
+v0.2.17
+    Checking spin 
+v0.9.8
+    Checking 
+untrusted v0.9.0
+    Checking 
+wasmi_arena v0.4.1
+    Checking 
+lazy_static v1.5.0
+   Compiling fnv 
+v1.0.7
+   Compiling 
+darling_core v0.20.11
+    Checking 
+soroban-wasmi 
+v0.31.1-soroban.20.0.1
+    Checking ring 
+v0.17.14
+    Checking 
+windows-targets 
+v0.53.5
+    Checking 
+windows_x86_64_msvc 
+v0.48.5
+   Compiling 
+wasmparser v0.116.1
+   Compiling clap 
+v4.6.0
+    Checking ark-ec 
+v0.4.2
+   Compiling 
+soroban-env-macros 
+v22.1.3
+    Checking 
+parking_lot v0.12.5
+    Checking 
+primeorder v0.13.6
+    Checking ed25519 
+v2.2.3
+    Checking 
+winapi-util v0.1.11
+    Checking 
+tracing-core v0.1.36
+    Checking bitflags 
+v2.11.0
+    Checking 
+unicode-width v0.1.14
+    Checking ethnum 
+v1.5.2
+    Checking keccak 
+v0.1.6
+    Checking 
+unicode-width v0.2.2
+    Checking winnow 
+v1.0.0
+    Checking 
+toml_parser 
+v1.1.0+spec-1.1.0
+    Checking sha3 
+v0.10.8
+   Compiling 
+soroban-spec v22.0.11
+    Checking 
+ed25519-dalek v2.2.0
+    Checking p256 
+v0.13.2
+    Checking 
+ark-bls12-381 v0.4.0
+    Checking 
+windows-targets 
+v0.48.5
+    Checking 
+windows-sys v0.60.2
+   Compiling 
+darling_macro v0.20.11
+    Checking anyhow 
+v1.0.102
+    Checking libc 
+v0.2.183
+   Compiling 
+prettyplease v0.2.37
+    Checking k256 
+v0.13.4
+    Checking 
+crossbeam-epoch 
+v0.9.18
+   Compiling soroban-b
+uiltin-sdk-macros 
+v22.1.3
+   Compiling 
+soroban-sdk-macros 
+v22.0.11
+    Checking 
+toml_datetime 
+v1.1.0+spec-1.1.0
+    Checking 
+serde_spanned v1.1.0
+    Checking 
+unicode-segmentation 
+v1.13.1
+    Checking 
+hashbrown v0.12.3
+    Checking 
+stable_deref_trait 
+v1.2.1
+    Checking bytemuck 
+v1.25.0
+    Checking 
+hex-literal v0.4.1
+    Checking foldhash 
+v0.1.5
+    Checking 
+allocator-api2 v0.2.21
+    Checking adler2 
+v2.0.1
+    Checking 
+simd-adler32 v0.3.8
+   Compiling 
+clap_mangen v0.2.33
+    Checking 
+miniz_oxide v0.8.9
+    Checking 
+hashbrown v0.15.5
+   Compiling heck 
+v0.3.3
+    Checking rgb 
+v0.8.53
+    Checking indexmap 
+v1.9.3
+    Checking toml 
+v1.1.0+spec-1.1.0
+    Checking 
+crossbeam-deque v0.8.6
+   Compiling 
+soroban-spec-rust 
+v22.0.11
+    Checking 
+shared_child v1.1.1
+   Compiling darling 
+v0.20.11
+    Checking 
+windows-sys v0.48.0
+    Checking 
+crc32fast v1.5.0
+    Checking 
+same-file v1.0.6
+   Compiling 
+clap_complete v4.6.0
+    Checking 
+rustls-webpki v0.101.7
+    Checking sct 
+v0.7.1
+    Checking colored 
+v2.2.0
+    Checking 
+backtrace v0.3.76
+    Checking 
+crossterm_winapi 
+v0.9.1
+   Compiling 
+strum_macros v0.26.4
+    Checking castaway 
+v0.2.4
+    Checking regex 
+v1.12.3
+    Checking 
+twox-hash v1.6.3
+    Checking 
+env_filter v1.0.1
+   Compiling 
+soroban-sdk v22.0.11
+    Checking 
+toml_datetime v0.6.11
+    Checking 
+serde_spanned v0.6.9
+    Checking 
+itertools v0.13.0
+    Checking 
+quick-xml v0.39.2
+    Checking os_pipe 
+v1.2.3
+    Checking socket2 
+v0.6.3
+    Checking mio 
+v1.1.1
+    Checking normpath 
+v1.5.0
+   Compiling 
+tracing-attributes 
+v0.1.31
+   Compiling 
+tokio-macros v2.6.1
+   Compiling 
+derive_more v0.99.20
+    Checking 
+nibble_vec v0.1.0
+    Checking filetime 
+v0.2.27
+    Checking winnow 
+v0.7.15
+    Checking arrayvec 
+v0.7.6
+    Checking base64 
+v0.21.7
+    Checking 
+unicode-linebreak 
+v0.1.5
+    Checking 
+toml_write v0.1.2
+    Checking is_ci 
+v1.2.0
+    Checking 
+encode_unicode v1.0.0
+    Checking 
+error-code v3.3.2
+    Checking 
+endian-type v0.1.2
+    Checking 
+shared_thread v0.2.0
+    Checking 
+option-ext v0.2.0
+    Checking ryu 
+v1.0.23
+    Checking 
+byteorder v1.5.0
+    Checking 
+hashbrown v0.14.5
+    Checking leb128 
+v0.2.5
+    Checking bytes 
+v1.11.1
+    Checking 
+fallible-iterator 
+v0.2.0
+    Checking dashmap 
+v6.1.0
+    Checking gimli 
+v0.26.2
+    Checking tokio 
+v1.50.0
+    Checking 
+wasm-encoder v0.29.0
+    Checking 
+soroban-env-host 
+v22.1.3
+    Checking ruzstd 
+v0.5.0
+    Checking 
+compact_str v0.7.1
+    Checking dirs-sys 
+v0.4.1
+    Checking duct 
+v1.1.1
+    Checking 
+radix_trie v0.2.1
+    Checking drawille 
+v0.3.0
+    Checking 
+toml_edit v0.22.27
+    Checking console 
+v0.15.11
+    Checking 
+clipboard-win v5.4.1
+    Checking 
+supports-color v3.0.2
+    Checking textwrap 
+v0.16.2
+    Checking 
+rustls-pemfile v1.0.4
+    Checking 
+num-format v0.4.4
+    Checking tracing 
+v0.1.44
+    Checking tar 
+v0.4.45
+    Checking opener 
+v0.8.4
+    Checking 
+lcov2cobertura v1.0.9
+    Checking strum 
+v0.26.3
+    Checking 
+unicode-truncate 
+v1.1.0
+    Checking 
+env_logger v0.11.10
+    Checking 
+crossterm v0.27.0
+    Checking 
+backtrace-ext v0.2.1
+    Checking soroban-l
+edger-snapshot 
+v22.0.11
+   Compiling 
+soroban-debugger 
+v0.1.0 (C:\Users\HomeP
+C\Desktop\DRIPS 
+W3\soroban-debugger)
+    Checking rustls 
+v0.21.12
+    Checking walkdir 
+v2.5.0
+    Checking flate2 
+v1.1.9
+    Checking 
+rayon-core v1.13.0
+    Checking 
+cargo-config2 v0.1.44
+    Checking fs-err 
+v3.3.0
+    Checking camino 
+v1.2.2
+    Checking lru 
+v0.12.5
+    Checking 
+owo-colors v4.3.0
+    Checking 
+portable-atomic 
+v1.13.1
+   Compiling 
+walrus-macro v0.19.0
+    Checking 
+tracing-log v0.2.0
+    Checking 
+tracing-serde v0.2.0
+    Checking 
+termcolor v1.4.1
+    Checking 
+sharded-slab v0.1.7
+    Checking matchers 
+v0.2.0
+    Checking fd-lock 
+v4.0.4
+    Checking 
+crossbeam-channel 
+v0.5.15
+   Compiling 
+bytes-lit v0.0.5
+    Checking 
+itertools v0.12.1
+    Checking 
+quick-xml v0.26.0
+    Checking 
+nu-ansi-term v0.50.3
+    Checking 
+is-terminal v0.4.17
+    Checking 
+terminal_size v0.4.4
+    Checking home 
+v0.5.12
+    Checking schannel 
+v0.1.29
+   Compiling 
+miette-derive v7.6.0
+   Compiling 
+futures-macro v0.3.32
+   Compiling ctor 
+v0.2.9
+   Compiling 
+stability v0.2.1
+    Checking 
+thread_local v1.1.9
+    Checking lexopt 
+v0.3.2
+    Checking 
+futures-task v0.3.32
+    Checking 
+futures-core v0.3.32
+    Checking id-arena 
+v2.3.0
+    Checking 
+supports-unicode 
+v3.0.0
+    Checking 
+str_stack v0.1.0
+    Checking glob 
+v0.3.3
+    Checking 
+fallible-iterator 
+v0.3.0
+    Checking slab 
+v0.4.12
+    Checking 
+supports-hyperlinks 
+v3.2.0
+    Checking 
+number_prefix v0.4.0
+    Checking 
+shell-escape v0.1.5
+    Checking ruzstd 
+v0.8.2
+    Checking 
+cassowary v0.3.0
+    Checking 
+wasmparser v0.80.2
+    Checking gimli 
+v0.28.1
+    Checking ratatui 
+v0.26.3
+    Checking 
+cargo-llvm-cov v0.8.5
+    Checking 
+indicatif v0.17.11
+    Checking walrus 
+v0.20.3
+    Checking 
+futures-util v0.3.32
+    Checking miette 
+v7.6.0
+    Checking inferno 
+v0.11.21
+    Checking 
+tracing-subscriber 
+v0.3.23
+    Checking 
+rustls-native-certs 
+v0.6.3
+    Checking 
+rustyline v13.0.0
+    Checking 
+tokio-rustls v0.24.1
+    Checking rayon 
+v1.11.0
+    Checking object 
+v0.32.2
+    Checking toml 
+v0.8.23
+    Checking 
+textplots v0.8.7
+    Checking dirs 
+v5.0.1
+    Checking 
+wasmparser v0.121.2
+    Checking atty 
+v0.2.14
+    Checking 
+serde_path_to_error 
+v0.1.20
+    Checking chrono 
+v0.4.44
+    Checking 
+libloading v0.8.9
+error: expected `;`, 
+found `signal`
+   --> src\analyzer\se
+curity.rs:809:11
+    |
+809 |     signal
+    |           ^ 
+help: add `;` here
+810 |
+811 |     
+signal.suspicious = st
+orage_calls_in_loops 
+> 0;
+    |     ------ 
+unexpected token
+
+error[E0433]: failed 
+to resolve: could not 
+find `Renderer` in 
+`flamegraph`
+  --> src\profiler\fla
+megraph.rs:81:49
+   |
+81 |         let mut 
+renderer = inferno::fl
+amegraph::Renderer::de
+fault()
+   |                  
+                      
+         ^^^^^^^^ 
+could not find 
+`Renderer` in 
+`flamegraph`
+
+error[E0425]: cannot 
+find type 
+`SymbolicProfile` in 
+this scope
+   --> src\cli\command
+s.rs:134:37
+    |
+134 | fn symbolic_prof
+ile_config(profile: 
+SymbolicProfile) -> 
+SymbolicConfig {
+    |                 
+                    
+^^^^^^^^^^^^^^^ not 
+found in this scope
+    |
+help: consider 
+importing this enum
+    |
+  1 + use crate::cli::
+args::SymbolicProfile;
+    |
+
+error[E0425]: cannot 
+find type 
+`SymbolicConfig` in 
+this scope
+   --> src\cli\command
+s.rs:134:57
+    |
+134 | fn symbolic_prof
+ile_config(profile: 
+SymbolicProfile) -> 
+SymbolicConfig {
+    |                 
+                      
+                  
+^^^^^^^^^^^^^^ not 
+found in this scope
+    |
+help: consider 
+importing this struct
+    |
+  1 + use crate::analy
+zer::symbolic::Symboli
+cConfig;
+    |
+
+error[E0433]: failed 
+to resolve: use of 
+undeclared type 
+`SymbolicProfile`
+   --> src\cli\command
+s.rs:136:9
+    |
+136 |         
+SymbolicProfile::Fast 
+=> SymbolicConfig::fas
+t(),
+    |         
+^^^^^^^^^^^^^^^ use 
+of undeclared type 
+`SymbolicProfile`
+    |
+help: consider 
+importing this enum
+    |
+  1 + use crate::cli::
+args::SymbolicProfile;
+    |
+
+error[E0433]: failed 
+to resolve: use of 
+undeclared type 
+`SymbolicConfig`
+   --> src\cli\command
+s.rs:136:34
+    |
+136 |         
+SymbolicProfile::Fast 
+=> SymbolicConfig::fas
+t(),
+    |                 
+                 
+^^^^^^^^^^^^^^ use of 
+undeclared type 
+`SymbolicConfig`
+    |
+help: consider 
+importing this struct
+    |
+  1 + use crate::analy
+zer::symbolic::Symboli
+cConfig;
+    |
+
+error[E0433]: failed 
+to resolve: use of 
+undeclared type 
+`SymbolicProfile`
+   --> src\cli\command
+s.rs:137:9
+    |
+137 |         Symbolic
+Profile::Balanced => S
+ymbolicConfig::balance
+d(),
+    |         
+^^^^^^^^^^^^^^^ use 
+of undeclared type 
+`SymbolicProfile`
+    |
+help: consider 
+importing this enum
+    |
+  1 + use crate::cli::
+args::SymbolicProfile;
+    |
+
+error[E0433]: failed 
+to resolve: use of 
+undeclared type 
+`SymbolicConfig`
+   --> src\cli\command
+s.rs:137:38
+    |
+137 |         Symbolic
+Profile::Balanced => S
+ymbolicConfig::balance
+d(),
+    |                 
+                     
+^^^^^^^^^^^^^^ use of 
+undeclared type 
+`SymbolicConfig`
+    |
+help: consider 
+importing this struct
+    |
+  1 + use crate::analy
+zer::symbolic::Symboli
+cConfig;
+    |
+
+error[E0433]: failed 
+to resolve: use of 
+undeclared type 
+`SymbolicProfile`
+   --> src\cli\command
+s.rs:138:9
+    |
+138 |         
+SymbolicProfile::Deep 
+=> SymbolicConfig::dee
+p(),
+    |         
+^^^^^^^^^^^^^^^ use 
+of undeclared type 
+`SymbolicProfile`
+    |
+help: consider 
+importing this enum
+    |
+  1 + use crate::cli::
+args::SymbolicProfile;
+    |
+
+error[E0433]: failed 
+to resolve: use of 
+undeclared type 
+`SymbolicConfig`
+   --> src\cli\command
+s.rs:138:34
+    |
+138 |         
+SymbolicProfile::Deep 
+=> SymbolicConfig::dee
+p(),
+    |                 
+                 
+^^^^^^^^^^^^^^ use of 
+undeclared type 
+`SymbolicConfig`
+    |
+help: consider 
+importing this struct
+    |
+  1 + use crate::analy
+zer::symbolic::Symboli
+cConfig;
+    |
+
+error[E0425]: cannot 
+find type 
+`SymbolicConfig` in 
+this scope
+   --> src\cli\command
+s.rs:142:54
+    |
+142 | fn symbolic_conf
+ig_from_args(args: 
+&SymbolicArgs) -> 
+SymbolicConfig {
+    |                 
+                      
+               
+^^^^^^^^^^^^^^ not 
+found in this scope
+    |
+help: consider 
+importing this struct
+    |
+  1 + use crate::analy
+zer::symbolic::Symboli
+cConfig;
+    |
+
+error[E0425]: cannot 
+find value `engine` 
+in this scope
+   --> src\cli\command
+s.rs:226:33
+    |
+213 |     _engine: 
+&mut DebuggerEngine,
+    |     ------- 
+`_engine` defined here
+...
+226 |     display_inst
+ruction_context(engine
+, 3);
+    |                 
+                ^^^^^^
+    |
+help: the leading 
+underscore in 
+`_engine` marks it as 
+unused, consider 
+renaming it to 
+`engine`
+    |
+213 -     _engine: 
+&mut DebuggerEngine,
+213 +     engine: 
+&mut DebuggerEngine,
+    |
+
+error[E0425]: cannot 
+find value `engine` 
+in this scope
+   --> src\cli\command
+s.rs:242:58
+    |
+213 |     _engine: 
+&mut DebuggerEngine,
+    |     ------- 
+`_engine` defined here
+...
+242 |             "n" 
+| "next" | "s" | 
+"step" | "into" | "" 
+=> engine.step_into(),
+    |                 
+                      
+                   
+^^^^^^
+    |
+help: the leading 
+underscore in 
+`_engine` marks it as 
+unused, consider 
+renaming it to 
+`engine`
+    |
+213 -     _engine: 
+&mut DebuggerEngine,
+213 +     engine: 
+&mut DebuggerEngine,
+    |
+
+error[E0425]: cannot 
+find value `engine` 
+in this scope
+   --> src\cli\command
+s.rs:243:29
+    |
+213 |     _engine: 
+&mut DebuggerEngine,
+    |     ------- 
+`_engine` defined here
+...
+243 |             "o" 
+| "over" => 
+engine.step_over(),
+    |                 
+            ^^^^^^
+    |
+help: the leading 
+underscore in 
+`_engine` marks it as 
+unused, consider 
+renaming it to 
+`engine`
+    |
+213 -     _engine: 
+&mut DebuggerEngine,
+213 +     engine: 
+&mut DebuggerEngine,
+    |
+
+error[E0425]: cannot 
+find value `engine` 
+in this scope
+   --> src\cli\command
+s.rs:244:28
+    |
+213 |     _engine: 
+&mut DebuggerEngine,
+    |     ------- 
+`_engine` defined here
+...
+244 |             "u" 
+| "out" => 
+engine.step_out(),
+    |                 
+           ^^^^^^
+    |
+help: the leading 
+underscore in 
+`_engine` marks it as 
+unused, consider 
+renaming it to 
+`engine`
+    |
+213 -     _engine: 
+&mut DebuggerEngine,
+213 +     engine: 
+&mut DebuggerEngine,
+    |
+
+error[E0425]: cannot 
+find value `engine` 
+in this scope
+   --> src\cli\command
+s.rs:245:30
+    |
+213 |     _engine: 
+&mut DebuggerEngine,
+    |     ------- 
+`_engine` defined here
+...
+245 |             "b" 
+| "block" => 
+engine.step_block(),
+    |                 
+             ^^^^^^
+    |
+help: the leading 
+underscore in 
+`_engine` marks it as 
+unused, consider 
+renaming it to 
+`engine`
+    |
+213 -     _engine: 
+&mut DebuggerEngine,
+213 +     engine: 
+&mut DebuggerEngine,
+    |
+
+error[E0425]: cannot 
+find value `engine` 
+in this scope
+   --> src\cli\command
+s.rs:246:38
+    |
+213 |     _engine: 
+&mut DebuggerEngine,
+    |     ------- 
+`_engine` defined here
+...
+246 |             "p" 
+| "prev" | "back" => 
+engine.step_back(),
+    |                 
+                     
+^^^^^^
+    |
+help: the leading 
+underscore in 
+`_engine` marks it as 
+unused, consider 
+renaming it to 
+`engine`
+    |
+213 -     _engine: 
+&mut DebuggerEngine,
+213 +     engine: 
+&mut DebuggerEngine,
+    |
+
+error[E0425]: cannot 
+find value `engine` 
+in this scope
+   --> src\cli\command
+s.rs:249:17
+    |
+213 |     _engine: 
+&mut DebuggerEngine,
+    |     ------- 
+`_engine` defined here
+...
+249 |                 
+engine.continue_execut
+ion()?;
+    |                 
+^^^^^^
+    |
+help: the leading 
+underscore in 
+`_engine` marks it as 
+unused, consider 
+renaming it to 
+`engine`
+    |
+213 -     _engine: 
+&mut DebuggerEngine,
+213 +     engine: 
+&mut DebuggerEngine,
+    |
+
+error[E0425]: cannot 
+find value `engine` 
+in this scope
+   --> src\cli\command
+s.rs:250:27
+    |
+213 |     _engine: 
+&mut DebuggerEngine,
+    |     ------- 
+`_engine` defined here
+...
+250 |                 
+let res = engine.execu
+te_without_breakpoints
+(function, args)?;
+    |                 
+          ^^^^^^
+    |
+help: the leading 
+underscore in 
+`_engine` marks it as 
+unused, consider 
+renaming it to 
+`engine`
+    |
+213 -     _engine: 
+&mut DebuggerEngine,
+213 +     engine: 
+&mut DebuggerEngine,
+    |
+
+error[E0425]: cannot 
+find value `function` 
+in this scope
+   --> src\cli\command
+s.rs:250:62
+    |
+214 |     _function: 
+&str,
+    |     --------- 
+`_function` defined 
+here
+...
+250 |                 
+let res = engine.execu
+te_without_breakpoints
+(function, args)?;
+    |                 
+                      
+                      
+ ^^^^^^^^
+    |
+help: the leading 
+underscore in 
+`_function` marks it 
+as unused, consider 
+renaming it to 
+`function`
+    |
+214 -     _function: 
+&str,
+214 +     function: 
+&str,
+    |
+
+error[E0425]: cannot 
+find value `args` in 
+this scope
+   --> src\cli\command
+s.rs:250:72
+    |
+215 |     _args: 
+Option<&str>,
+    |     ----- 
+`_args` defined here
+...
+250 |                 
+let res = engine.execu
+te_without_breakpoints
+(function, args)?;
+    |                 
+                      
+                      
+           ^^^^
+    |
+help: the leading 
+underscore in `_args` 
+marks it as unused, 
+consider renaming it 
+to `args`
+    |
+215 -     _args: 
+Option<&str>,
+215 +     args: 
+Option<&str>,
+    |
+help: consider 
+importing this 
+function
+    |
+  1 + use 
+std::env::args;
+    |
+
+error[E0425]: cannot 
+find value `engine` 
+in this scope
+   --> src\cli\command
+s.rs:258:42
+    |
+213 |     _engine: 
+&mut DebuggerEngine,
+    |     ------- 
+`_engine` defined here
+...
+258 |                 
+display_instruction_in
+fo(engine);
+    |                 
+                      
+   ^^^^^^
+    |
+help: the leading 
+underscore in 
+`_engine` marks it as 
+unused, consider 
+renaming it to 
+`engine`
+    |
+213 -     _engine: 
+&mut DebuggerEngine,
+213 +     engine: 
+&mut DebuggerEngine,
+    |
+
+error[E0425]: cannot 
+find value `engine` 
+in this scope
+   --> src\cli\command
+s.rs:262:45
+    |
+213 |     _engine: 
+&mut DebuggerEngine,
+    |     ------- 
+`_engine` defined here
+...
+262 |                 
+display_instruction_co
+ntext(engine, 5);
+    |                 
+                      
+      ^^^^^^
+    |
+help: the leading 
+underscore in 
+`_engine` marks it as 
+unused, consider 
+renaming it to 
+`engine`
+    |
+213 -     _engine: 
+&mut DebuggerEngine,
+213 +     engine: 
+&mut DebuggerEngine,
+    |
+
+error[E0425]: cannot 
+find value `engine` 
+in this scope
+   --> src\cli\command
+s.rs:286:53
+    |
+213 |     _engine: 
+&mut DebuggerEngine,
+    |     ------- 
+`_engine` defined here
+...
+286 |             
+Ok(true) => display_in
+struction_context(engi
+ne, 3),
+    |                 
+                      
+              ^^^^^^
+    |
+help: the leading 
+underscore in 
+`_engine` marks it as 
+unused, consider 
+renaming it to 
+`engine`
+    |
+213 -     _engine: 
+&mut DebuggerEngine,
+213 +     engine: 
+&mut DebuggerEngine,
+    |
+
+error[E0433]: failed 
+to resolve: use of 
+undeclared type 
+`UpgradeAnalyzer`
+    --> src\cli\comman
+ds.rs:1252:9
+     |
+1252 |         Upgrade
+Analyzer::analyze(&old
+_wasm, &new_wasm, 
+&old_path, &new_path, 
+execution_diffs)?;
+     |         
+^^^^^^^^^^^^^^^ use 
+of undeclared type 
+`UpgradeAnalyzer`
+     |
+help: consider 
+importing this struct
+     |
+   1 + use crate::anal
+yzer::upgrade::Upgrade
+Analyzer;
+     |
+
+error[E0425]: cannot 
+find type 
+`ExecutionDiff` in 
+this scope
+    --> src\cli\comman
+ds.rs:1283:17
+     |
+1283 | ) -> Result<Vec
+<ExecutionDiff>> {
+     |                
+ ^^^^^^^^^^^^^ not 
+found in this scope
+     |
+help: consider 
+importing this struct
+     |
+   1 + use crate::anal
+yzer::upgrade::Executi
+onDiff;
+     |
+
+error[E0422]: cannot 
+find struct, variant 
+or union type 
+`ExecutionDiff` in 
+this scope
+    --> src\cli\comman
+ds.rs:1302:20
+     |
+1302 |         diffs.p
+ush(ExecutionDiff {
+     |                
+    ^^^^^^^^^^^^^ not 
+found in this scope
+     |
+help: consider 
+importing this struct
+     |
+   1 + use crate::anal
+yzer::upgrade::Executi
+onDiff;
+     |
+
+error[E0425]: cannot 
+find type 
+`CompatibilityReport` 
+in this scope
+    --> src\cli\comman
+ds.rs:1334:32
+     |
+1334 | fn format_text_
+report(report: 
+&CompatibilityReport) 
+-> String {
+     |                
+                
+^^^^^^^^^^^^^^^^^^^ 
+not found in this 
+scope
+     |
+help: consider 
+importing this struct
+     |
+   1 + use crate::anal
+yzer::upgrade::Compati
+bilityReport;
+     |
+
+error[E0425]: cannot 
+find value `token` in 
+this scope
+    --> src\cli\comman
+ds.rs:1856:12
+     |
+1856 |         if 
+token.trim().len() < 
+16 {
+     |            
+^^^^^ not found in 
+this scope
+
+warning: unused 
+import: 
+`FunctionProfile`
+ --> src\profiler\flam
+egraph.rs:1:33
+  |
+1 | use crate::profile
+r::analyzer::{Function
+Profile, 
+OptimizationReport};
+  |                   
+              
+^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unus
+ed_imports)]` (part 
+of `#[warn(unused)]`) 
+on by default
+
+warning: unused 
+import: 
+`std::io::Write`
+ --> src\profiler\flam
+egraph.rs:3:5
+  |
+3 | use 
+std::io::Write;
+  |     ^^^^^^^^^^^^^^
+
+error[E0599]: no 
+function or 
+associated item named 
+`is_guarded` found 
+for struct 
+`ArithmeticCheckRule` 
+in the current scope
+   --> src\analyzer\se
+curity.rs:322:53
+    |
+299 | struct 
+ArithmeticCheckRule;
+    | ----------------
+---------- function 
+or associated item 
+`is_guarded` not 
+found for this struct
+...
+322 |             if S
+elf::is_arithmetic(ins
+tr) && !Self::is_guard
+ed(&instructions, i) {
+    |                 
+                      
+              
+^^^^^^^^^^ function 
+or associated item 
+not found in 
+`ArithmeticCheckRule`
+
+error[E0560]: struct 
+`SecurityFinding` has 
+no field named 
+`context`
+   --> src\analyzer\se
+curity.rs:330:21
+    |
+330 |                 
+    context: None,
+    |                 
+    ^^^^^^^ 
+`SecurityFinding` 
+does not have this 
+field
+    |
+    = note: available 
+fields are: 
+`rationale`
+
+error[E0560]: struct 
+`SecurityFinding` has 
+no field named 
+`context`
+   --> src\analyzer\se
+curity.rs:525:13
+    |
+525 |             
+context: None,
+    |             
+^^^^^^^ 
+`SecurityFinding` 
+does not have this 
+field
+    |
+    = note: available 
+fields are: 
+`rationale`
+
+error[E0560]: struct 
+`SecurityFinding` has 
+no field named 
+`context`
+   --> src\analyzer\se
+curity.rs:612:13
+    |
+612 |             
+context: 
+analysis.context,
+    |             
+^^^^^^^ 
+`SecurityFinding` 
+does not have this 
+field
+    |
+    = note: available 
+fields are: 
+`rationale`
+
+error[E0609]: no 
+field `context` on 
+type `UnboundedStaticS
+ignal`
+   --> src\analyzer\se
+curity.rs:612:31
+    |
+612 |             
+context: 
+analysis.context,
+    |                 
+              ^^^^^^^ 
+unknown field
+    |
+    = note: available 
+fields are: 
+`suspicious`, `storage
+_calls_inside_loops`, 
+`confidence`, 
+`rationale`, 
+`loop_types`, 
+`max_nesting_depth`
+
+error[E0609]: no 
+field `context` on 
+type `SecurityFinding`
+   --> src\analyzer\se
+curity.rs:616:41
+    |
+616 |         if let 
+Some(context) = 
+&finding.context {
+    |                 
+                      
+  ^^^^^^^ unknown 
+field
+    |
+    = note: available 
+fields are: 
+`rule_id`, 
+`severity`, 
+`location`, 
+`description`, 
+`remediation` ... and 
+2 others
+
+error[E0599]: no 
+method named 
+`saturating_shl` 
+found for type `u32` 
+in the current scope
+   --> src\client\remo
+te_client.rs:671:20
+    |
+671 |     let exp = 1u
+32.saturating_shl((att
+empt - 1).min(31) as 
+u32);
+    |                 
+   ^^^^^^^^^^^^^^
+    |
+help: there is a 
+method 
+`saturating_mul` with 
+a similar name
+    |
+671 -     let exp = 1u
+32.saturating_shl((att
+empt - 1).min(31) as 
+u32);
+671 +     let exp = 1u
+32.saturating_mul((att
+empt - 1).min(31) as 
+u32);
+    |
+
+error[E0609]: no 
+field `total_cpu` on 
+type `(&std::string::S
+tring, &profiler::anal
+yzer::StorageAccess)`
+  --> src\profiler\fla
+megraph.rs:45:35
+   |
+45 |                 
+let cost = 
+access.total_cpu as 
+f64;
+   |                  
+                 
+^^^^^^^^^ unknown 
+field
+   |
+help: one of the 
+expressions' fields 
+has a field of the 
+same name
+   |
+45 |                 
+let cost = 
+access.1.total_cpu as 
+f64;
+   |                  
+                 ++
+
+error[E0609]: no 
+field `access_count` 
+on type `(&std::string
+::String, &profiler::a
+nalyzer::StorageAccess
+)`
+  --> src\profiler\fla
+megraph.rs:54:40
+   |
+54 | ...              
+     
+access.access_count
+   |                  
+            
+^^^^^^^^^^^^ unknown 
+field
+   |
+help: one of the 
+expressions' fields 
+has a field of the 
+same name
+   |
+54 |                  
+               
+access.1.access_count
+   |                  
+                      
+++
+
+error[E0277]: `?` 
+couldn't convert the 
+error: 
+`FromUtf8Error: 
+miette::Diagnostic` 
+is not satisfied
+  --> src\profiler\fla
+megraph.rs:90:34
+   |
+90 |         Ok(String
+::from_utf8(svg)?)
+   |            ------
+----------------^ the 
+trait 
+`miette::Diagnostic` 
+is not implemented 
+for `FromUtf8Error`
+   |            |
+   |            this 
+has type `Result<_, 
+FromUtf8Error>`
+   |
+   = note: the 
+question mark 
+operation (`?`) 
+implicitly performs a 
+conversion on the 
+error value using the 
+`From` trait
+   = help: the 
+following other types 
+implement trait 
+`miette::Diagnostic`:
+             
+DebuggerError
+             
+Infallible
+             
+InstallError
+             
+MietteDiagnostic
+             
+MietteError
+             
+SimulatorError
+   = note: required 
+for `ErrReport` to 
+implement 
+`From<FromUtf8Error>`
+
+error[E0277]: `?` 
+couldn't convert the 
+error: 
+`std::io::Error: 
+miette::Diagnostic` 
+is not satisfied
+  --> src\profiler\fla
+megraph.rs:98:40
+   |
+98 |         
+std::fs::write(path, 
+collapsed)?;
+   |         ---------
+----------------------
+^ the trait 
+`miette::Diagnostic` 
+is not implemented 
+for `std::io::Error`
+   |         |
+   |         this has 
+type `Result<_, 
+std::io::Error>`
+   |
+   = note: the 
+question mark 
+operation (`?`) 
+implicitly performs a 
+conversion on the 
+error value using the 
+`From` trait
+   = help: the 
+following other types 
+implement trait 
+`miette::Diagnostic`:
+             
+DebuggerError
+             
+Infallible
+             
+InstallError
+             
+MietteDiagnostic
+             
+MietteError
+             
+SimulatorError
+   = note: required 
+for `ErrReport` to 
+implement 
+`From<std::io::Error>`
+
+error[E0277]: `?` 
+couldn't convert the 
+error: 
+`std::io::Error: 
+miette::Diagnostic` 
+is not satisfied
+   --> src\profiler\fl
+amegraph.rs:109:34
+    |
+109 |         
+std::fs::write(path, 
+svg)?;
+    |         --------
+-----------------^ 
+the trait 
+`miette::Diagnostic` 
+is not implemented 
+for `std::io::Error`
+    |         |
+    |         this 
+has type `Result<_, 
+std::io::Error>`
+    |
+    = note: the 
+question mark 
+operation (`?`) 
+implicitly performs a 
+conversion on the 
+error value using the 
+`From` trait
+    = help: the 
+following other types 
+implement trait 
+`miette::Diagnostic`:
+              
+DebuggerError
+              
+Infallible
+              
+InstallError
+              
+MietteDiagnostic
+              
+MietteError
+              
+SimulatorError
+    = note: required 
+for `ErrReport` to 
+implement 
+`From<std::io::Error>`
+
+error: future cannot 
+be sent between 
+threads safely
+   --> src\server\debu
+g_server_impl.rs:45:13
+    |
+ 45 | /             
+tokio::spawn(async 
+move {
+ 46 | |               
+  let _ = handle_conne
+ction(stream, 
+token).await;
+ 47 | |             
+});
+    | 
+|______________^ 
+future created by 
+async block is not 
+`Send`
+    |
+    = help: within 
+`{async block@src\serv
+er\debug_server_impl.r
+s:45:26: 45:36}`, the 
+trait `Send` is not 
+implemented for `Rc<so
+roban_env_host::host::
+HostImpl>`
+note: future is not 
+`Send` as this value 
+is used across an 
+await
+   --> src\server\debu
+g_server_impl.rs:86:14
+    |
+ 76 |     let mut 
+engine: Option<Debugge
+rEngine> = None;
+    |         
+---------- has type `s
+td::option::Option<Deb
+uggerEngine>` which 
+is not `Send`
+...
+ 86 |             
+.await
+    |              
+^^^^^ await occurs 
+here, with `mut 
+engine` maybe used 
+later
+note: required by a 
+bound in 
+`tokio::spawn`
+   --> C:\Users\HomePC
+\.cargo\registry\src\i
+ndex.crates.io-1949cf8
+c6b5b557f\tokio-1.50.0
+\src\task\spawn.rs:176
+:21
+    |
+174 |     pub fn 
+spawn<F>(future: F) 
+-> 
+JoinHandle<F::Output>
+    |            
+----- required by a 
+bound in this function
+175 |     where
+176 |         F: 
+Future + Send + 
+'static,
+    |                 
+    ^^^^ required by 
+this bound in `spawn`
+
+error: future cannot 
+be sent between 
+threads safely
+   --> src\server\debu
+g_server_impl.rs:45:13
+    |
+ 45 | /             
+tokio::spawn(async 
+move {
+ 46 | |               
+  let _ = handle_conne
+ction(stream, 
+token).await;
+ 47 | |             
+});
+    | 
+|______________^ 
+future created by 
+async block is not 
+`Send`
+    |
+    = help: within 
+`{async block@src\serv
+er\debug_server_impl.r
+s:45:26: 45:36}`, the 
+trait `Send` is not 
+implemented for `Rc<Re
+fCell<Generators>>`
+note: future is not 
+`Send` as this value 
+is used across an 
+await
+   --> src\server\debu
+g_server_impl.rs:86:14
+    |
+ 76 |     let mut 
+engine: Option<Debugge
+rEngine> = None;
+    |         
+---------- has type `s
+td::option::Option<Deb
+uggerEngine>` which 
+is not `Send`
+...
+ 86 |             
+.await
+    |              
+^^^^^ await occurs 
+here, with `mut 
+engine` maybe used 
+later
+note: required by a 
+bound in 
+`tokio::spawn`
+   --> C:\Users\HomePC
+\.cargo\registry\src\i
+ndex.crates.io-1949cf8
+c6b5b557f\tokio-1.50.0
+\src\task\spawn.rs:176
+:21
+    |
+174 |     pub fn 
+spawn<F>(future: F) 
+-> 
+JoinHandle<F::Output>
+    |            
+----- required by a 
+bound in this function
+175 |     where
+176 |         F: 
+Future + Send + 
+'static,
+    |                 
+    ^^^^ required by 
+this bound in `spawn`
+
+error: future cannot 
+be sent between 
+threads safely
+   --> src\server\debu
+g_server_impl.rs:45:13
+    |
+ 45 | /             
+tokio::spawn(async 
+move {
+ 46 | |               
+  let _ = handle_conne
+ction(stream, 
+token).await;
+ 47 | |             
+});
+    | 
+|______________^ 
+future created by 
+async block is not 
+`Send`
+    |
+    = help: within 
+`{async block@src\serv
+er\debug_server_impl.r
+s:45:26: 45:36}`, the 
+trait `Send` is not 
+implemented for `Rc<Re
+fCell<AuthSnapshot>>`
+note: future is not 
+`Send` as this value 
+is used across an 
+await
+   --> src\server\debu
+g_server_impl.rs:86:14
+    |
+ 76 |     let mut 
+engine: Option<Debugge
+rEngine> = None;
+    |         
+---------- has type `s
+td::option::Option<Deb
+uggerEngine>` which 
+is not `Send`
+...
+ 86 |             
+.await
+    |              
+^^^^^ await occurs 
+here, with `mut 
+engine` maybe used 
+later
+note: required by a 
+bound in 
+`tokio::spawn`
+   --> C:\Users\HomePC
+\.cargo\registry\src\i
+ndex.crates.io-1949cf8
+c6b5b557f\tokio-1.50.0
+\src\task\spawn.rs:176
+:21
+    |
+174 |     pub fn 
+spawn<F>(future: F) 
+-> 
+JoinHandle<F::Output>
+    |            
+----- required by a 
+bound in this function
+175 |     where
+176 |         F: 
+Future + Send + 
+'static,
+    |                 
+    ^^^^ required by 
+this bound in `spawn`
+
+error: future cannot 
+be sent between 
+threads safely
+   --> src\server\debu
+g_server_impl.rs:45:13
+    |
+ 45 | /             
+tokio::spawn(async 
+move {
+ 46 | |               
+  let _ = handle_conne
+ction(stream, 
+token).await;
+ 47 | |             
+});
+    | 
+|______________^ 
+future created by 
+async block is not 
+`Send`
+    |
+    = help: within 
+`{async block@src\serv
+er\debug_server_impl.r
+s:45:26: 45:36}`, the 
+trait `Send` is not 
+implemented for 
+`Rc<LedgerSnapshot>`
+note: future is not 
+`Send` as this value 
+is used across an 
+await
+   --> src\server\debu
+g_server_impl.rs:86:14
+    |
+ 76 |     let mut 
+engine: Option<Debugge
+rEngine> = None;
+    |         
+---------- has type `s
+td::option::Option<Deb
+uggerEngine>` which 
+is not `Send`
+...
+ 86 |             
+.await
+    |              
+^^^^^ await occurs 
+here, with `mut 
+engine` maybe used 
+later
+note: required by a 
+bound in 
+`tokio::spawn`
+   --> C:\Users\HomePC
+\.cargo\registry\src\i
+ndex.crates.io-1949cf8
+c6b5b557f\tokio-1.50.0
+\src\task\spawn.rs:176
+:21
+    |
+174 |     pub fn 
+spawn<F>(future: F) 
+-> 
+JoinHandle<F::Output>
+    |            
+----- required by a 
+bound in this function
+175 |     where
+176 |         F: 
+Future + Send + 
+'static,
+    |                 
+    ^^^^ required by 
+this bound in `spawn`
+
+warning: value 
+assigned to 
+`operation` is never 
+read
+   --> 
+src\lib.rs:103:22
+    |
+103 |     
+RequestTimeout { 
+operation: String, 
+timeout_ms: u64 },
+    |                 
+     ^^^^^^^^^
+    |
+    = help: maybe it 
+is overwritten before 
+being read?
+    = note: `#[warn(un
+used_assignments)]` 
+(part of 
+`#[warn(unused)]`) on 
+by default
+
+warning: value 
+assigned to 
+`timeout_ms` is never 
+read
+   --> 
+src\lib.rs:103:41
+    |
+103 |     
+RequestTimeout { 
+operation: String, 
+timeout_ms: u64 },
+    |                 
+                      
+  ^^^^^^^^^^
+    |
+    = help: maybe it 
+is overwritten before 
+being read?
+
+Some errors have 
+detailed 
+explanations: E0277, 
+E0422, E0425, E0433, 
+E0560, E0599, E0609.
+For more information 
+about an error, try 
+`rustc --explain 
+E0277`.
+warning: 
+`soroban-debugger` 
+(lib) generated 4 
+warnings
+error: could not 
+compile 
+`soroban-debugger` 
+(lib) due to 45 
+previous errors; 4 
+warnings emitted

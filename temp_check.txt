@@ -1,0 +1,178 @@
+﻿cargo :     Checking 
+soroban-debugger v0.1.0 (C:\U
+sers\HomePC\Desktop\DRIPS 
+W3\soroban-debugger)
+At line:1 char:1
++ cargo check --bin temp 
+2>&1 | Out-File -FilePath 
+temp_check.txt -Enco ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo           
+   : NotSpecified: (    Che  
+  cking so...roban-debugge   
+ r):String) [], RemoteExc    
+eption
+    + FullyQualifiedErrorId  
+   : NativeCommandError
+ 
+warning: unused import: 
+`FunctionProfile`
+ --> src\profiler\flamegraph.
+rs:1:33
+  |
+1 | use crate::profiler::anal
+yzer::{FunctionProfile, 
+OptimizationReport};
+  |                          
+       ^^^^^^^^^^^^^^^
+  |
+  = note: 
+`#[warn(unused_imports)]` 
+(part of `#[warn(unused)]`) 
+on by default
+
+error[E0599]: no method 
+named `width` found for 
+struct `inferno::flamegraph::
+Options<'a>` in the current 
+scope
+  --> src\profiler\flamegraph
+.rs:81:14
+   |
+80 |           let mut 
+renderer = inferno::flamegrap
+h::Options::default()
+   |  
+____________________________-
+81 | |             
+.width(width)
+   | |             -^^^^^ 
+method not found in `inferno:
+:flamegraph::Options<'_>`
+   | |_____________|
+   |
+
+warning: variable `storage_ca
+lls_outside_loops` is 
+assigned to, but never used
+   --> src\analyzer\security.
+rs:680:9
+    |
+680 |     let mut 
+storage_calls_outside_loops 
+= 0usize;
+    |         ^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^
+    |
+    = note: consider using `_
+storage_calls_outside_loops` 
+instead
+    = note: 
+`#[warn(unused_variables)]` 
+(part of `#[warn(unused)]`) 
+on by default
+
+warning: variable 
+`conditional_branches` is 
+assigned to, but never used
+   --> src\analyzer\security.
+rs:683:9
+    |
+683 |     let mut 
+conditional_branches = 
+0usize;
+    |         
+^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: consider using 
+`_conditional_branches` 
+instead
+
+warning: value assigned to `s
+torage_calls_outside_loops` 
+is never read
+   --> src\analyzer\security.
+rs:758:37
+    |
+758 | ...                   
+storage_calls_outside_loops 
++= 1;
+    |                       ^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^
+    |
+    = help: maybe it is 
+overwritten before being 
+read?
+    = note: `#[warn(unused_as
+signments)]` (part of 
+`#[warn(unused)]`) on by 
+default
+
+warning: value assigned to 
+`conditional_branches` is 
+never read
+   --> src\analyzer\security.
+rs:733:29
+    |
+733 | ...                   
+conditional_branches += 1;
+    |                       
+^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: maybe it is 
+overwritten before being 
+read?
+
+warning: value assigned to 
+`conditional_branches` is 
+never read
+   --> src\analyzer\security.
+rs:763:29
+    |
+763 | ...                   
+conditional_branches += 1;
+    |                       
+^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: maybe it is 
+overwritten before being 
+read?
+
+warning: value assigned to 
+`operation` is never read
+   --> src\lib.rs:103:22
+    |
+103 |     RequestTimeout { 
+operation: String, 
+timeout_ms: u64 },
+    |                      
+^^^^^^^^^
+    |
+    = help: maybe it is 
+overwritten before being 
+read?
+
+warning: value assigned to 
+`timeout_ms` is never read
+   --> src\lib.rs:103:41
+    |
+103 |     RequestTimeout { 
+operation: String, 
+timeout_ms: u64 },
+    |                        
+                 ^^^^^^^^^^
+    |
+    = help: maybe it is 
+overwritten before being 
+read?
+
+For more information about 
+this error, try `rustc 
+--explain E0599`.
+warning: `soroban-debugger` 
+(lib) generated 8 warnings
+error: could not compile 
+`soroban-debugger` (lib) due 
+to 1 previous error; 8 
+warnings emitted

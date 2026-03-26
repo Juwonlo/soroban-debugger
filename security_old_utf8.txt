@@ -1,4 +1,4 @@
-use crate::runtime::executor::ContractExecutor;
+﻿use crate::runtime::executor::ContractExecutor;
 use crate::server::protocol::{DynamicTraceEvent, DynamicTraceEventKind};
 use crate::utils::wasm::{parse_instructions, WasmInstruction};
 use crate::Result;
@@ -39,35 +39,14 @@ pub struct SecurityFinding {
     pub rationale: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RuleMetadata {
-    pub id: String,
-    pub name: String,
-    pub description: String,
-    pub severity: Severity,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SecurityReport {
     pub findings: Vec<SecurityFinding>,
-    pub rules: HashMap<String, RuleMetadata>,
 }
 
 pub trait SecurityRule {
-    fn id(&self) -> &str;
     fn name(&self) -> &str;
     fn description(&self) -> &str;
-    fn severity(&self) -> Severity;
-
-    fn metadata(&self) -> RuleMetadata {
-        RuleMetadata {
-            id: self.id().to_string(),
-            name: self.name().to_string(),
-            description: self.description().to_string(),
-            severity: self.severity(),
-        }
-    }
-
     fn analyze_static(&self, _wasm_bytes: &[u8]) -> Result<Vec<SecurityFinding>> {
         Ok(vec![])
     }
@@ -108,37 +87,29 @@ impl SecurityAnalyzer {
         let mut report = SecurityReport::default();
 
         for rule in &self.rules {
-            let id = rule.id();
+            let name = rule.name();
             
-            if !filter.enable_rules.is_empty() && !filter.enable_rules.iter().any(|r| r == id) {
+            if !filter.enable_rules.is_empty() && !filter.enable_rules.iter().any(|r| r == name) {
                 continue;
             }
-            if filter.disable_rules.iter().any(|r| r == id) {
+            if filter.disable_rules.iter().any(|r| r == name) {
                 continue;
             }
 
             let static_findings = rule.analyze_static(wasm_bytes)?;
-            let filtered_static: Vec<_> = static_findings
-                .into_iter()
-                .filter(|f| f.severity >= filter.min_severity)
-                .collect();
-            
-            if !filtered_static.is_empty() {
-                report.rules.insert(id.to_string(), rule.metadata());
-                report.findings.extend(filtered_static);
-            }
+            report.findings.extend(
+                static_findings
+                    .into_iter()
+                    .filter(|f| f.severity >= filter.min_severity),
+            );
 
             if let Some(tr) = trace {
                 let dynamic_findings = rule.analyze_dynamic(executor, tr)?;
-                let filtered_dynamic: Vec<_> = dynamic_findings
-                    .into_iter()
-                    .filter(|f| f.severity >= filter.min_severity)
-                    .collect();
-                
-                if !filtered_dynamic.is_empty() {
-                    report.rules.insert(id.to_string(), rule.metadata());
-                    report.findings.extend(filtered_dynamic);
-                }
+                report.findings.extend(
+                    dynamic_findings
+                        .into_iter()
+                        .filter(|f| f.severity >= filter.min_severity),
+                );
             }
         }
 
@@ -176,16 +147,16 @@ fn strkey_crc16(data: &[u8]) -> u16 {
 /// Returns `true` only when `s` is a cryptographically valid Stellar StrKey.
 ///
 /// Validation steps (SEP-0023):
-///   1. Must be exactly 56 characters, all from the base32 alphabet (A–Z, 2–7).
+///   1. Must be exactly 56 characters, all from the base32 alphabet (AΓÇôZ, 2ΓÇô7).
 ///   2. Base32-decode to exactly 35 bytes.
 ///   3. `decoded[0]` must be a recognised version byte:
-///      • `0x30` (6 << 3) → ED25519 public key  → 'G' prefix
-///      • `0x10` (2 << 3) → contract address    → 'C' prefix
+///      ΓÇó `0x30` (6 << 3) ΓåÆ ED25519 public key  ΓåÆ 'G' prefix
+///      ΓÇó `0x10` (2 << 3) ΓåÆ contract address    ΓåÆ 'C' prefix
 ///   4. CRC-16/XModem over `decoded[0..33]` must equal the little-endian u16
 ///      stored in `decoded[33..35]`.
 ///
 /// Any 56-char string that fails even one of these steps is **not** a valid
-/// address — it is, for example, an error-message fragment, a base64 blob, or
+/// address ΓÇö it is, for example, an error-message fragment, a base64 blob, or
 /// a random identifier that merely happens to start with 'G' or 'C'.
 fn is_valid_strkey(s: &str) -> bool {
     if s.len() != 56 {
@@ -193,7 +164,7 @@ fn is_valid_strkey(s: &str) -> bool {
     }
 
     // --- Base32 decode (RFC 4648, no padding) ---
-    // 56 chars × 5 bits = 280 bits = 35 bytes exactly.
+    // 56 chars ├ù 5 bits = 280 bits = 35 bytes exactly.
     let mut decoded = [0u8; 35];
     let mut bits: u64 = 0;
     let mut bit_count: u32 = 0;
@@ -241,20 +212,11 @@ fn is_valid_strkey(s: &str) -> bool {
 
 struct HardcodedAddressRule;
 impl SecurityRule for HardcodedAddressRule {
-    fn id(&self) -> &str {
+    fn name(&self) -> &str {
         "hardcoded-address"
     }
-
-    fn name(&self) -> &str {
-        "Hardcoded Address detector"
-    }
-
     fn description(&self) -> &str {
         "Detects hardcoded Stellar addresses in WASM data sections."
-    }
-
-    fn severity(&self) -> Severity {
-        Severity::Medium
     }
 
     fn analyze_static(&self, wasm_bytes: &[u8]) -> Result<Vec<SecurityFinding>> {
@@ -265,8 +227,8 @@ impl SecurityRule for HardcodedAddressRule {
                 for data in reader.into_iter().flatten() {
                     let content = String::from_utf8_lossy(data.data);
                     for word in content.split(|c: char| !c.is_alphanumeric()) {
-                        // Guard 1 – fast pre-filter (cheap): right length and prefix.
-                        // Guard 2 – full StrKey validation (base32 + version byte + CRC-16).
+                        // Guard 1 ΓÇô fast pre-filter (cheap): right length and prefix.
+                        // Guard 2 ΓÇô full StrKey validation (base32 + version byte + CRC-16).
                         //
                         // Without guard 2, arbitrary 56-char constants such as error
                         // message fragments or base64 blobs that happen to start with
@@ -276,7 +238,7 @@ impl SecurityRule for HardcodedAddressRule {
                             && is_valid_strkey(word)
                         {
                             findings.push(SecurityFinding {
-                                rule_id: self.id().to_string(),
+                                rule_id: self.name().to_string(),
                                 severity: Severity::Medium,
                                 location: "Data Section".to_string(),
                                 description: format!("Found potential hardcoded address: {}", word),
@@ -298,20 +260,11 @@ impl SecurityRule for HardcodedAddressRule {
 
 struct ArithmeticCheckRule;
 impl SecurityRule for ArithmeticCheckRule {
-    fn id(&self) -> &str {
+    fn name(&self) -> &str {
         "arithmetic-overflow"
     }
-
-    fn name(&self) -> &str {
-        "Arithmetic Overflow detector"
-    }
-
     fn description(&self) -> &str {
         "Detects potential for unchecked arithmetic overflow."
-    }
-
-    fn severity(&self) -> Severity {
-        Severity::Medium
     }
 
     fn analyze_static(&self, wasm_bytes: &[u8]) -> Result<Vec<SecurityFinding>> {
@@ -319,15 +272,15 @@ impl SecurityRule for ArithmeticCheckRule {
         let instructions = parse_instructions(wasm_bytes);
 
         for (i, instr) in instructions.iter().enumerate() {
-            if Self::is_arithmetic(instr) {
+            if Self::is_arithmetic(instr) && !Self::is_guarded(&instructions, i) {
                 findings.push(SecurityFinding {
-                    rule_id: self.id().to_string(),
+                    rule_id: self.name().to_string(),
                     severity: Severity::Medium,
                     location: format!("Instruction {}", i),
                     description: format!("Unchecked arithmetic operation detected: {:?}", instr),
                     remediation: "Ensure arithmetic operations are guarded with proper bounds checks or overflow handling.".to_string(),
                     confidence: None,
-                    rationale: None,
+                    context: None,
                 });
             }
         }
@@ -348,34 +301,15 @@ impl ArithmeticCheckRule {
                 | WasmInstruction::I64Mul
         )
     }
-
-    fn is_guarded(instructions: &[WasmInstruction], idx: usize) -> bool {
-        let end = (idx + 4).min(instructions.len());
-        for instr in &instructions[idx + 1..end] {
-            if matches!(instr, WasmInstruction::If | WasmInstruction::BrIf) {
-                return true;
-            }
-        }
-        false
-    }
 }
 
 struct AuthorizationCheckRule;
 impl SecurityRule for AuthorizationCheckRule {
-    fn id(&self) -> &str {
+    fn name(&self) -> &str {
         "missing-auth"
     }
-
-    fn name(&self) -> &str {
-        "Missing Authorization detector"
-    }
-
     fn description(&self) -> &str {
         "Detects sensitive flows missing authorization checks."
-    }
-
-    fn severity(&self) -> Severity {
-        Severity::High
     }
 
     fn analyze_dynamic(
@@ -415,7 +349,7 @@ impl SecurityRule for AuthorizationCheckRule {
         // If we have storage writes without preceding auth, report a finding
         if !problematic_storage_writes.is_empty() {
             findings.push(SecurityFinding {
-                rule_id: self.id().to_string(),
+                rule_id: self.name().to_string(),
                 severity: Severity::High,
                 location: "Dynamic trace".to_string(),
                 description: format!(
@@ -434,20 +368,11 @@ impl SecurityRule for AuthorizationCheckRule {
 
 struct ReentrancyPatternRule;
 impl SecurityRule for ReentrancyPatternRule {
-    fn id(&self) -> &str {
+    fn name(&self) -> &str {
         "reentrancy-pattern"
     }
-
-    fn name(&self) -> &str {
-        "Reentrancy Pattern detector"
-    }
-
     fn description(&self) -> &str {
         "Detects cross-contract calls followed by storage writes in the same call frame."
-    }
-
-    fn severity(&self) -> Severity {
-        Severity::High
     }
 
     fn analyze_dynamic(
@@ -475,20 +400,12 @@ struct PendingCrossCall {
 
 struct CrossContractImportRule;
 impl SecurityRule for CrossContractImportRule {
-    fn id(&self) -> &str {
-        "cross-contract-import"
-    }
-
     fn name(&self) -> &str {
-        "Cross-Contract Import detector"
+        "cross-contract-import"
     }
 
     fn description(&self) -> &str {
         "Detects cross-contract host function imports with robust name matching."
-    }
-
-    fn severity(&self) -> Severity {
-        Severity::Low
     }
 
     fn analyze_static(&self, wasm_bytes: &[u8]) -> Result<Vec<SecurityFinding>> {
@@ -522,7 +439,7 @@ impl SecurityRule for CrossContractImportRule {
         }
 
         Ok(vec![SecurityFinding {
-            rule_id: self.id().to_string(),
+            rule_id: self.name().to_string(),
             severity: Severity::Low,
             location: "Import Section".to_string(),
             description: format!(
@@ -532,7 +449,7 @@ impl SecurityRule for CrossContractImportRule {
             remediation: "Review external call sites for reentrancy and authorization checks."
                 .to_string(),
             confidence: None,
-            rationale: None,
+            context: None,
         }])
     }
 }
@@ -587,20 +504,11 @@ fn is_cross_contract_host_import(module: &str, name: &str) -> bool {
 
 struct UnboundedIterationRule;
 impl SecurityRule for UnboundedIterationRule {
-    fn id(&self) -> &str {
+    fn name(&self) -> &str {
         "unbounded-iteration"
     }
-
-    fn name(&self) -> &str {
-        "Unbounded Iteration detector"
-    }
-
     fn description(&self) -> &str {
         "Detects storage-driven loops and unbounded read patterns."
-    }
-
-    fn severity(&self) -> Severity {
-        Severity::High
     }
 
     fn analyze_static(&self, wasm_bytes: &[u8]) -> Result<Vec<SecurityFinding>> {
@@ -609,8 +517,8 @@ impl SecurityRule for UnboundedIterationRule {
             return Ok(Vec::new());
         }
 
-        let finding = SecurityFinding {
-            rule_id: self.id().to_string(),
+        let mut finding = SecurityFinding {
+            rule_id: self.name().to_string(),
             severity: Severity::High,
             location: "WASM code section".to_string(),
             description: format!(
@@ -619,8 +527,30 @@ impl SecurityRule for UnboundedIterationRule {
             ),
             remediation: "Bound iteration over storage-backed collections (pagination, explicit limits, or capped batch size).".to_string(),
             confidence: analysis.confidence,
-            rationale: analysis.rationale,
+            context: analysis.context,
         };
+
+        // Enhance description with additional context if available
+        if let Some(context) = &finding.context {
+            if let Some(pattern) = &context.storage_call_pattern {
+                if pattern.calls_outside_loops > 0 {
+                    finding.description = format!(
+                        "{} Also found {} storage calls outside loops (may indicate mixed access patterns).",
+                        finding.description,
+                        pattern.calls_outside_loops
+                    );
+                }
+            }
+
+            if let Some(depth) = context.loop_nesting_depth {
+                if depth > 1 {
+                    finding.description = format!(
+                        "{} Loop nesting depth: {} (increased complexity).",
+                        finding.description, depth
+                    );
+                }
+            }
+        }
 
         Ok(vec![finding])
     }
@@ -633,7 +563,7 @@ impl SecurityRule for UnboundedIterationRule {
         Ok(analyze_unbounded_iteration_dynamic(trace)
             .into_iter()
             .map(|mut finding| {
-                finding.rule_id = self.id().to_string();
+                finding.rule_id = self.name().to_string();
                 finding
             })
             .collect())
@@ -792,6 +722,9 @@ fn analyze_unbounded_iteration_static(wasm_bytes: &[u8]) -> UnboundedStaticSigna
     ));
 
     signal.confidence = Some(confidence);
+
+    signal.suspicious = storage_calls_in_loops > 0;
+    signal
 
     signal.suspicious = storage_calls_in_loops > 0;
     signal
@@ -1029,7 +962,7 @@ mod tests {
         payload[1..].copy_from_slice(key_bytes);
         let crc = strkey_crc16(&payload);
 
-        // 2. Concatenate payload + CRC (little-endian) → 35 bytes.
+        // 2. Concatenate payload + CRC (little-endian) ΓåÆ 35 bytes.
         let mut raw = [0u8; 35];
         raw[..33].copy_from_slice(&payload);
         raw[33..].copy_from_slice(&crc.to_le_bytes());
@@ -1052,7 +985,7 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // is_valid_strkey — unit tests
+    // is_valid_strkey ΓÇö unit tests
     // -----------------------------------------------------------------------
 
     /// A programmatically constructed StrKey (version 0x30, all-zero key) must
@@ -1086,7 +1019,7 @@ mod tests {
     }
 
     /// 56 uppercase-ASCII chars starting with 'G' but with all-'A' payload have
-    /// the wrong CRC — the rule must NOT fire for them.
+    /// the wrong CRC ΓÇö the rule must NOT fire for them.
     #[test]
     fn strkey_rejects_wrong_checksum() {
         // Build exactly 56 chars: 'G' + 55 'A's.
@@ -1104,7 +1037,7 @@ mod tests {
     /// rejected before the CRC is even checked.
     #[test]
     fn strkey_rejects_non_base32_characters() {
-        // Contains '0', '1', and lower-case letters — all outside A-Z/2-7.
+        // Contains '0', '1', and lower-case letters ΓÇö all outside A-Z/2-7.
         let bad_chars = "G0001111abcdefghABCDEFGHIJKLMNOPQRSTUVWXYZ234567ABCDE";
         assert_eq!(bad_chars.len(), 53); // not 56, show next case is the real one
                                          // Craft exactly 56 chars with an invalid char ('0') at position 1.
@@ -1147,7 +1080,7 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // HardcodedAddressRule — fixture tests (the "suggested verification")
+    // HardcodedAddressRule ΓÇö fixture tests (the "suggested verification")
     // -----------------------------------------------------------------------
 
     /// Builds a minimal but structurally valid WASM module whose data section
@@ -1158,7 +1091,7 @@ mod tests {
         //   magic + version
         //   data-section (id=11):
         //     segment-count = 1
-        //     segment: kind=passive(1), byte-length, bytes…
+        //     segment: kind=passive(1), byte-length, bytesΓÇª
         let data = payload.as_bytes();
         let data_len = data.len();
 
@@ -1190,7 +1123,7 @@ mod tests {
         wasm
     }
 
-    /// **Core regression test** — a data section full of random-looking 56-char
+    /// **Core regression test** ΓÇö a data section full of random-looking 56-char
     /// tokens that start with 'G' or 'C' but are NOT valid StrKeys must produce
     /// zero findings.
     #[test]
@@ -1198,8 +1131,8 @@ mod tests {
         // These are 56-char strings starting with 'G'/'C' composed entirely of
         // valid base32 characters, yet none carries a correct CRC-16 checksum.
         let fake_tokens = [
-            "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", // 57 → trim
-            "CBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",  // 55 → skip
+            "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", // 57 ΓåÆ trim
+            "CBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",  // 55 ΓåÆ skip
             // Exactly 56 chars, valid base32, but wrong CRC:
             "GABCDEFGHIJKLMNOPQRSTUVWXYZ234567ABCDEFGHIJKLMNOPQRSTUVW",
             "CABCDEFGHIJKLMNOPQRSTUVWXYZ234567ABCDEFGHIJKLMNOPQRSTUVW",
@@ -1211,7 +1144,7 @@ mod tests {
             // Trim/pad to exactly 56 chars for the ones that need it.
             let t: String = token.chars().take(56).collect();
             if t.len() < 56 {
-                continue; // shorter than 56 — would not be picked up anyway
+                continue; // shorter than 56 ΓÇö would not be picked up anyway
             }
             let wasm = wasm_with_data_string(&t);
             let findings = rule
@@ -1278,7 +1211,7 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // ArithmeticCheckRule / is_guarded — fixture tests
+    // ArithmeticCheckRule / is_guarded ΓÇö fixture tests
     // -----------------------------------------------------------------------
 
     /// Bare arithmetic with no surrounding instructions must be flagged.
@@ -1316,7 +1249,7 @@ mod tests {
     }
 
     /// A `BrIf` that falls *outside* the 3-instruction lookahead must NOT
-    /// suppress the finding — the guard is too far away to be meaningful.
+    /// suppress the finding ΓÇö the guard is too far away to be meaningful.
     #[test]
     fn is_guarded_false_when_brif_beyond_lookahead() {
         // idx=0, window covers idx+1..idx+4 (indices 1, 2, 3).
@@ -1326,12 +1259,12 @@ mod tests {
             WasmInstruction::Unknown(0x41), // idx 1
             WasmInstruction::Unknown(0x41), // idx 2
             WasmInstruction::Unknown(0x41), // idx 3
-            WasmInstruction::BrIf,          // idx 4 — outside window
+            WasmInstruction::BrIf,          // idx 4 ΓÇö outside window
         ];
         assert!(!ArithmeticCheckRule::is_guarded(&instrs, 0));
     }
 
-    /// **Key regression** — a `BrIf` that appears *before* the arithmetic
+    /// **Key regression** ΓÇö a `BrIf` that appears *before* the arithmetic
     /// (guarding something else entirely) must NOT suppress the finding.
     ///
     /// The old code used `idx.saturating_sub(2)` as the start, so a BrIf
@@ -1342,7 +1275,7 @@ mod tests {
         assert!(!ArithmeticCheckRule::is_guarded(&instrs, 1));
     }
 
-    /// **Key regression** — a `Call` anywhere near the arithmetic must NOT
+    /// **Key regression** ΓÇö a `Call` anywhere near the arithmetic must NOT
     /// suppress the finding.  An unrelated call (logger, helper, etc.) is not
     /// a bounds check.
     #[test]
@@ -1365,7 +1298,7 @@ mod tests {
     }
 
     /// A `Call` between the arithmetic and a `BrIf` must not block the guard
-    /// from being recognised — only the presence of If/BrIf matters.
+    /// from being recognised ΓÇö only the presence of If/BrIf matters.
     #[test]
     fn is_guarded_true_when_brif_follows_call_after_arithmetic() {
         // i32.add  ->  call (side-effect)  ->  br_if (checks result)
@@ -1386,7 +1319,7 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // ReentrancyPatternRule — call-frame correlation tests
+    // ReentrancyPatternRule ΓÇö call-frame correlation tests
     // -----------------------------------------------------------------------
 
     fn make_event(seq: usize, kind: DynamicTraceEventKind, depth: u32) -> DynamicTraceEvent {
@@ -1394,16 +1327,15 @@ mod tests {
             sequence: seq,
             kind,
             message: String::new(),
-            caller: None,
             function: None,
             storage_key: None,
             storage_value: None,
-            call_depth: Some(depth as usize),
+            call_depth: depth,
         }
     }
 
     /// Safe pattern: cross-contract call at depth 0, storage write happens
-    /// inside the callee at depth 1 (different frame) — must produce NO finding.
+    /// inside the callee at depth 1 (different frame) ΓÇö must produce NO finding.
     #[test]
     fn reentrancy_no_finding_for_write_in_callee_frame() {
         let trace = vec![
@@ -1411,14 +1343,14 @@ mod tests {
             make_event(1, DynamicTraceEventKind::StorageWrite, 1),
         ];
         assert!(
-            analyze_reentrancy_pattern_dynamic(&trace).is_empty(),
+            analyze_reentrancy_dynamic(&trace).is_empty(),
             "write in callee frame must not be flagged as reentrancy"
         );
     }
 
     /// Safe pattern: cross-contract call at depth 0, callee returns (depth drops
     /// back to 0 via a FunctionCall event), then a write at depth 0 in a later
-    /// unrelated function — must produce NO finding.
+    /// unrelated function ΓÇö must produce NO finding.
     #[test]
     fn reentrancy_no_finding_for_write_after_call_returned() {
         let trace = vec![
@@ -1428,13 +1360,13 @@ mod tests {
             make_event(3, DynamicTraceEventKind::StorageWrite, 0),
         ];
         assert!(
-            analyze_reentrancy_pattern_dynamic(&trace).is_empty(),
+            analyze_reentrancy_dynamic(&trace).is_empty(),
             "write after call has returned must not be flagged"
         );
     }
 
     /// Safe pattern: callee writes at depth 1, then caller writes at depth 0
-    /// after an explicit CrossContractReturn — must produce NO finding.
+    /// after an explicit CrossContractReturn ΓÇö must produce NO finding.
     #[test]
     fn reentrancy_no_finding_for_write_after_callee_write_and_return() {
         let trace = vec![
@@ -1444,20 +1376,20 @@ mod tests {
             make_event(3, DynamicTraceEventKind::StorageWrite, 0),
         ];
         assert!(
-            analyze_reentrancy_pattern_dynamic(&trace).is_empty(),
+            analyze_reentrancy_dynamic(&trace).is_empty(),
             "write at depth 0 after explicit return must not be flagged"
         );
     }
 
     /// Unsafe pattern: cross-contract call at depth 0, storage write also at
-    /// depth 0 (same frame, after the call) — must produce exactly one finding.
+    /// depth 0 (same frame, after the call) ΓÇö must produce exactly one finding.
     #[test]
     fn reentrancy_finding_for_write_in_same_frame_after_cross_call() {
         let trace = vec![
             make_event(0, DynamicTraceEventKind::CrossContractCall, 0),
             make_event(1, DynamicTraceEventKind::StorageWrite, 0),
         ];
-        let findings = analyze_reentrancy_pattern_dynamic(&trace);
+        let findings = analyze_reentrancy_dynamic(&trace);
         assert_eq!(
             findings.len(),
             1,
@@ -1628,7 +1560,7 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // is_storage_read_import — variant name and module matching tests
+    // is_storage_read_import ΓÇö variant name and module matching tests
     // -----------------------------------------------------------------------
 
     #[test]
@@ -1670,7 +1602,7 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // AuthorizationCheckRule — dynamic trace tests
+    // AuthorizationCheckRule ΓÇö dynamic trace tests
     // -----------------------------------------------------------------------
 
     #[test]

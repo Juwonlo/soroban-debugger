@@ -1,0 +1,1329 @@
+﻿cargo :     Checking 
+soroban-debugger 
+v0.1.0 (C:\Users\HomeP
+C\Desktop\DRIPS 
+W3\soroban-debugger)
+At line:1 char:1
++ cargo check > 
+build_error_v2.txt 
+2>&1
++ ~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~
+    + CategoryInfo    
+          : NotSpeci  
+  fied: (    Checki   
+ ng so...roban-deb    
+ugger):String) []    
+, RemoteException
+    + FullyQualifiedE 
+   rrorId : NativeCo  
+  mmandError
+ 
+error[E0433]: failed 
+to resolve: could not 
+find `Renderer` in 
+`flamegraph`
+  --> src\profiler\fla
+megraph.rs:81:49
+   |
+81 |         let mut 
+renderer = inferno::fl
+amegraph::Renderer::de
+fault()
+   |                  
+                      
+         ^^^^^^^^ 
+could not find 
+`Renderer` in 
+`flamegraph`
+
+error[E0425]: cannot 
+find value `engine` 
+in this scope
+   --> src\cli\command
+s.rs:227:33
+    |
+214 |     _engine: 
+&mut DebuggerEngine,
+    |     ------- 
+`_engine` defined here
+...
+227 |     display_inst
+ruction_context(engine
+, 3);
+    |                 
+                ^^^^^^
+    |
+help: the leading 
+underscore in 
+`_engine` marks it as 
+unused, consider 
+renaming it to 
+`engine`
+    |
+214 -     _engine: 
+&mut DebuggerEngine,
+214 +     engine: 
+&mut DebuggerEngine,
+    |
+
+error[E0425]: cannot 
+find value `engine` 
+in this scope
+   --> src\cli\command
+s.rs:243:58
+    |
+214 |     _engine: 
+&mut DebuggerEngine,
+    |     ------- 
+`_engine` defined here
+...
+243 |             "n" 
+| "next" | "s" | 
+"step" | "into" | "" 
+=> engine.step_into(),
+    |                 
+                      
+                   
+^^^^^^
+    |
+help: the leading 
+underscore in 
+`_engine` marks it as 
+unused, consider 
+renaming it to 
+`engine`
+    |
+214 -     _engine: 
+&mut DebuggerEngine,
+214 +     engine: 
+&mut DebuggerEngine,
+    |
+
+error[E0425]: cannot 
+find value `engine` 
+in this scope
+   --> src\cli\command
+s.rs:244:29
+    |
+214 |     _engine: 
+&mut DebuggerEngine,
+    |     ------- 
+`_engine` defined here
+...
+244 |             "o" 
+| "over" => 
+engine.step_over(),
+    |                 
+            ^^^^^^
+    |
+help: the leading 
+underscore in 
+`_engine` marks it as 
+unused, consider 
+renaming it to 
+`engine`
+    |
+214 -     _engine: 
+&mut DebuggerEngine,
+214 +     engine: 
+&mut DebuggerEngine,
+    |
+
+error[E0425]: cannot 
+find value `engine` 
+in this scope
+   --> src\cli\command
+s.rs:245:28
+    |
+214 |     _engine: 
+&mut DebuggerEngine,
+    |     ------- 
+`_engine` defined here
+...
+245 |             "u" 
+| "out" => 
+engine.step_out(),
+    |                 
+           ^^^^^^
+    |
+help: the leading 
+underscore in 
+`_engine` marks it as 
+unused, consider 
+renaming it to 
+`engine`
+    |
+214 -     _engine: 
+&mut DebuggerEngine,
+214 +     engine: 
+&mut DebuggerEngine,
+    |
+
+error[E0425]: cannot 
+find value `engine` 
+in this scope
+   --> src\cli\command
+s.rs:246:30
+    |
+214 |     _engine: 
+&mut DebuggerEngine,
+    |     ------- 
+`_engine` defined here
+...
+246 |             "b" 
+| "block" => 
+engine.step_block(),
+    |                 
+             ^^^^^^
+    |
+help: the leading 
+underscore in 
+`_engine` marks it as 
+unused, consider 
+renaming it to 
+`engine`
+    |
+214 -     _engine: 
+&mut DebuggerEngine,
+214 +     engine: 
+&mut DebuggerEngine,
+    |
+
+error[E0425]: cannot 
+find value `engine` 
+in this scope
+   --> src\cli\command
+s.rs:247:38
+    |
+214 |     _engine: 
+&mut DebuggerEngine,
+    |     ------- 
+`_engine` defined here
+...
+247 |             "p" 
+| "prev" | "back" => 
+engine.step_back(),
+    |                 
+                     
+^^^^^^
+    |
+help: the leading 
+underscore in 
+`_engine` marks it as 
+unused, consider 
+renaming it to 
+`engine`
+    |
+214 -     _engine: 
+&mut DebuggerEngine,
+214 +     engine: 
+&mut DebuggerEngine,
+    |
+
+error[E0425]: cannot 
+find value `engine` 
+in this scope
+   --> src\cli\command
+s.rs:250:17
+    |
+214 |     _engine: 
+&mut DebuggerEngine,
+    |     ------- 
+`_engine` defined here
+...
+250 |                 
+engine.continue_execut
+ion()?;
+    |                 
+^^^^^^
+    |
+help: the leading 
+underscore in 
+`_engine` marks it as 
+unused, consider 
+renaming it to 
+`engine`
+    |
+214 -     _engine: 
+&mut DebuggerEngine,
+214 +     engine: 
+&mut DebuggerEngine,
+    |
+
+error[E0425]: cannot 
+find value `engine` 
+in this scope
+   --> src\cli\command
+s.rs:251:27
+    |
+214 |     _engine: 
+&mut DebuggerEngine,
+    |     ------- 
+`_engine` defined here
+...
+251 |                 
+let res = engine.execu
+te_without_breakpoints
+(function, args)?;
+    |                 
+          ^^^^^^
+    |
+help: the leading 
+underscore in 
+`_engine` marks it as 
+unused, consider 
+renaming it to 
+`engine`
+    |
+214 -     _engine: 
+&mut DebuggerEngine,
+214 +     engine: 
+&mut DebuggerEngine,
+    |
+
+error[E0425]: cannot 
+find value `function` 
+in this scope
+   --> src\cli\command
+s.rs:251:62
+    |
+215 |     _function: 
+&str,
+    |     --------- 
+`_function` defined 
+here
+...
+251 |                 
+let res = engine.execu
+te_without_breakpoints
+(function, args)?;
+    |                 
+                      
+                      
+ ^^^^^^^^
+    |
+help: the leading 
+underscore in 
+`_function` marks it 
+as unused, consider 
+renaming it to 
+`function`
+    |
+215 -     _function: 
+&str,
+215 +     function: 
+&str,
+    |
+
+error[E0425]: cannot 
+find value `args` in 
+this scope
+   --> src\cli\command
+s.rs:251:72
+    |
+216 |     _args: 
+Option<&str>,
+    |     ----- 
+`_args` defined here
+...
+251 |                 
+let res = engine.execu
+te_without_breakpoints
+(function, args)?;
+    |                 
+                      
+                      
+           ^^^^
+    |
+help: the leading 
+underscore in `_args` 
+marks it as unused, 
+consider renaming it 
+to `args`
+    |
+216 -     _args: 
+Option<&str>,
+216 +     args: 
+Option<&str>,
+    |
+help: consider 
+importing this 
+function
+    |
+  1 + use 
+std::env::args;
+    |
+
+error[E0425]: cannot 
+find value `engine` 
+in this scope
+   --> src\cli\command
+s.rs:259:42
+    |
+214 |     _engine: 
+&mut DebuggerEngine,
+    |     ------- 
+`_engine` defined here
+...
+259 |                 
+display_instruction_in
+fo(engine);
+    |                 
+                      
+   ^^^^^^
+    |
+help: the leading 
+underscore in 
+`_engine` marks it as 
+unused, consider 
+renaming it to 
+`engine`
+    |
+214 -     _engine: 
+&mut DebuggerEngine,
+214 +     engine: 
+&mut DebuggerEngine,
+    |
+
+error[E0425]: cannot 
+find value `engine` 
+in this scope
+   --> src\cli\command
+s.rs:263:45
+    |
+214 |     _engine: 
+&mut DebuggerEngine,
+    |     ------- 
+`_engine` defined here
+...
+263 |                 
+display_instruction_co
+ntext(engine, 5);
+    |                 
+                      
+      ^^^^^^
+    |
+help: the leading 
+underscore in 
+`_engine` marks it as 
+unused, consider 
+renaming it to 
+`engine`
+    |
+214 -     _engine: 
+&mut DebuggerEngine,
+214 +     engine: 
+&mut DebuggerEngine,
+    |
+
+error[E0425]: cannot 
+find value `engine` 
+in this scope
+   --> src\cli\command
+s.rs:287:53
+    |
+214 |     _engine: 
+&mut DebuggerEngine,
+    |     ------- 
+`_engine` defined here
+...
+287 |             
+Ok(true) => display_in
+struction_context(engi
+ne, 3),
+    |                 
+                      
+              ^^^^^^
+    |
+help: the leading 
+underscore in 
+`_engine` marks it as 
+unused, consider 
+renaming it to 
+`engine`
+    |
+214 -     _engine: 
+&mut DebuggerEngine,
+214 +     engine: 
+&mut DebuggerEngine,
+    |
+
+error[E0425]: cannot 
+find value `token` in 
+this scope
+    --> src\cli\comman
+ds.rs:1857:12
+     |
+1857 |         if 
+token.trim().len() < 
+16 {
+     |            
+^^^^^ not found in 
+this scope
+
+warning: unused 
+import: 
+`FunctionProfile`
+ --> src\profiler\flam
+egraph.rs:1:33
+  |
+1 | use crate::profile
+r::analyzer::{Function
+Profile, 
+OptimizationReport};
+  |                   
+              
+^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unus
+ed_imports)]` (part 
+of `#[warn(unused)]`) 
+on by default
+
+warning: unused 
+import: 
+`std::io::Write`
+ --> src\profiler\flam
+egraph.rs:3:5
+  |
+3 | use 
+std::io::Write;
+  |     ^^^^^^^^^^^^^^
+
+error[E0599]: no 
+function or 
+associated item named 
+`is_guarded` found 
+for struct 
+`ArithmeticCheckRule` 
+in the current scope
+   --> src\analyzer\se
+curity.rs:322:53
+    |
+299 | struct 
+ArithmeticCheckRule;
+    | ----------------
+---------- function 
+or associated item 
+`is_guarded` not 
+found for this struct
+...
+322 |             if S
+elf::is_arithmetic(ins
+tr) && !Self::is_guard
+ed(&instructions, i) {
+    |                 
+                      
+              
+^^^^^^^^^^ function 
+or associated item 
+not found in 
+`ArithmeticCheckRule`
+
+error[E0560]: struct 
+`SecurityFinding` has 
+no field named 
+`context`
+   --> src\analyzer\se
+curity.rs:330:21
+    |
+330 |                 
+    context: None,
+    |                 
+    ^^^^^^^ 
+`SecurityFinding` 
+does not have this 
+field
+    |
+    = note: available 
+fields are: 
+`rationale`
+
+error[E0560]: struct 
+`SecurityFinding` has 
+no field named 
+`context`
+   --> src\analyzer\se
+curity.rs:525:13
+    |
+525 |             
+context: None,
+    |             
+^^^^^^^ 
+`SecurityFinding` 
+does not have this 
+field
+    |
+    = note: available 
+fields are: 
+`rationale`
+
+error[E0560]: struct 
+`SecurityFinding` has 
+no field named 
+`context`
+   --> src\analyzer\se
+curity.rs:612:13
+    |
+612 |             
+context: 
+analysis.context,
+    |             
+^^^^^^^ 
+`SecurityFinding` 
+does not have this 
+field
+    |
+    = note: available 
+fields are: 
+`rationale`
+
+error[E0609]: no 
+field `context` on 
+type `UnboundedStaticS
+ignal`
+   --> src\analyzer\se
+curity.rs:612:31
+    |
+612 |             
+context: 
+analysis.context,
+    |                 
+              ^^^^^^^ 
+unknown field
+    |
+    = note: available 
+fields are: 
+`suspicious`, `storage
+_calls_inside_loops`, 
+`confidence`, 
+`rationale`, 
+`loop_types`, 
+`max_nesting_depth`
+
+error[E0609]: no 
+field `context` on 
+type `SecurityFinding`
+   --> src\analyzer\se
+curity.rs:616:41
+    |
+616 |         if let 
+Some(context) = 
+&finding.context {
+    |                 
+                      
+  ^^^^^^^ unknown 
+field
+    |
+    = note: available 
+fields are: 
+`rule_id`, 
+`severity`, 
+`location`, 
+`description`, 
+`remediation` ... and 
+2 others
+
+error[E0599]: no 
+method named 
+`saturating_shl` 
+found for type `u32` 
+in the current scope
+   --> src\client\remo
+te_client.rs:671:20
+    |
+671 |     let exp = 1u
+32.saturating_shl((att
+empt - 1).min(31) as 
+u32);
+    |                 
+   ^^^^^^^^^^^^^^
+    |
+help: there is a 
+method 
+`saturating_mul` with 
+a similar name
+    |
+671 -     let exp = 1u
+32.saturating_shl((att
+empt - 1).min(31) as 
+u32);
+671 +     let exp = 1u
+32.saturating_mul((att
+empt - 1).min(31) as 
+u32);
+    |
+
+error[E0609]: no 
+field `total_cpu` on 
+type `(&std::string::S
+tring, &profiler::anal
+yzer::StorageAccess)`
+  --> src\profiler\fla
+megraph.rs:45:35
+   |
+45 |                 
+let cost = 
+access.total_cpu as 
+f64;
+   |                  
+                 
+^^^^^^^^^ unknown 
+field
+   |
+help: one of the 
+expressions' fields 
+has a field of the 
+same name
+   |
+45 |                 
+let cost = 
+access.1.total_cpu as 
+f64;
+   |                  
+                 ++
+
+error[E0609]: no 
+field `access_count` 
+on type `(&std::string
+::String, &profiler::a
+nalyzer::StorageAccess
+)`
+  --> src\profiler\fla
+megraph.rs:54:40
+   |
+54 | ...              
+     
+access.access_count
+   |                  
+            
+^^^^^^^^^^^^ unknown 
+field
+   |
+help: one of the 
+expressions' fields 
+has a field of the 
+same name
+   |
+54 |                  
+               
+access.1.access_count
+   |                  
+                      
+++
+
+error[E0277]: `?` 
+couldn't convert the 
+error: 
+`FromUtf8Error: 
+miette::Diagnostic` 
+is not satisfied
+  --> src\profiler\fla
+megraph.rs:90:34
+   |
+90 |         Ok(String
+::from_utf8(svg)?)
+   |            ------
+----------------^ the 
+trait 
+`miette::Diagnostic` 
+is not implemented 
+for `FromUtf8Error`
+   |            |
+   |            this 
+has type `Result<_, 
+FromUtf8Error>`
+   |
+   = note: the 
+question mark 
+operation (`?`) 
+implicitly performs a 
+conversion on the 
+error value using the 
+`From` trait
+   = help: the 
+following other types 
+implement trait 
+`miette::Diagnostic`:
+             
+DebuggerError
+             
+Infallible
+             
+InstallError
+             
+MietteDiagnostic
+             
+MietteError
+             
+SimulatorError
+   = note: required 
+for `ErrReport` to 
+implement 
+`From<FromUtf8Error>`
+
+error[E0277]: `?` 
+couldn't convert the 
+error: 
+`std::io::Error: 
+miette::Diagnostic` 
+is not satisfied
+  --> src\profiler\fla
+megraph.rs:98:40
+   |
+98 |         
+std::fs::write(path, 
+collapsed)?;
+   |         ---------
+----------------------
+^ the trait 
+`miette::Diagnostic` 
+is not implemented 
+for `std::io::Error`
+   |         |
+   |         this has 
+type `Result<_, 
+std::io::Error>`
+   |
+   = note: the 
+question mark 
+operation (`?`) 
+implicitly performs a 
+conversion on the 
+error value using the 
+`From` trait
+   = help: the 
+following other types 
+implement trait 
+`miette::Diagnostic`:
+             
+DebuggerError
+             
+Infallible
+             
+InstallError
+             
+MietteDiagnostic
+             
+MietteError
+             
+SimulatorError
+   = note: required 
+for `ErrReport` to 
+implement 
+`From<std::io::Error>`
+
+error[E0277]: `?` 
+couldn't convert the 
+error: 
+`std::io::Error: 
+miette::Diagnostic` 
+is not satisfied
+   --> src\profiler\fl
+amegraph.rs:109:34
+    |
+109 |         
+std::fs::write(path, 
+svg)?;
+    |         --------
+-----------------^ 
+the trait 
+`miette::Diagnostic` 
+is not implemented 
+for `std::io::Error`
+    |         |
+    |         this 
+has type `Result<_, 
+std::io::Error>`
+    |
+    = note: the 
+question mark 
+operation (`?`) 
+implicitly performs a 
+conversion on the 
+error value using the 
+`From` trait
+    = help: the 
+following other types 
+implement trait 
+`miette::Diagnostic`:
+              
+DebuggerError
+              
+Infallible
+              
+InstallError
+              
+MietteDiagnostic
+              
+MietteError
+              
+SimulatorError
+    = note: required 
+for `ErrReport` to 
+implement 
+`From<std::io::Error>`
+
+warning: variable `sto
+rage_calls_outside_loo
+ps` is assigned to, 
+but never used
+   --> src\analyzer\se
+curity.rs:692:9
+    |
+692 |     let mut stor
+age_calls_outside_loop
+s = 0usize;
+    |         ^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^
+^
+    |
+    = note: consider 
+using `_storage_calls_
+outside_loops` instead
+    = note: `#[warn(un
+used_variables)]` 
+(part of 
+`#[warn(unused)]`) on 
+by default
+
+warning: variable `con
+ditional_branches` is 
+assigned to, but 
+never used
+   --> src\analyzer\se
+curity.rs:695:9
+    |
+695 |     let mut 
+conditional_branches 
+= 0usize;
+    |         ^^^^^^^^
+^^^^^^^^^^^^^^^^
+    |
+    = note: consider 
+using `_conditional_br
+anches` instead
+
+warning: value 
+assigned to `storage_c
+alls_outside_loops` 
+is never read
+   --> src\analyzer\se
+curity.rs:770:37
+    |
+770 | ...             
+      storage_calls_ou
+tside_loops += 1;
+    |                 
+      ^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^
+    |
+    = help: maybe it 
+is overwritten before 
+being read?
+    = note: `#[warn(un
+used_assignments)]` 
+(part of 
+`#[warn(unused)]`) on 
+by default
+
+warning: value 
+assigned to `condition
+al_branches` is never 
+read
+   --> src\analyzer\se
+curity.rs:745:29
+    |
+745 | ...             
+      
+conditional_branches 
++= 1;
+    |                 
+      ^^^^^^^^^^^^^^^^
+^^^^^^^^^
+    |
+    = help: maybe it 
+is overwritten before 
+being read?
+
+warning: value 
+assigned to `condition
+al_branches` is never 
+read
+   --> src\analyzer\se
+curity.rs:775:29
+    |
+775 | ...             
+      
+conditional_branches 
++= 1;
+    |                 
+      ^^^^^^^^^^^^^^^^
+^^^^^^^^^
+    |
+    = help: maybe it 
+is overwritten before 
+being read?
+
+error: future cannot 
+be sent between 
+threads safely
+   --> src\server\debu
+g_server_impl.rs:45:13
+    |
+ 45 | /             
+tokio::spawn(async 
+move {
+ 46 | |               
+  let _ = handle_conne
+ction(stream, 
+token).await;
+ 47 | |             
+});
+    | 
+|______________^ 
+future created by 
+async block is not 
+`Send`
+    |
+    = help: within 
+`{async block@src\serv
+er\debug_server_impl.r
+s:45:26: 45:36}`, the 
+trait `Send` is not 
+implemented for `Rc<so
+roban_env_host::host::
+HostImpl>`
+note: future is not 
+`Send` as this value 
+is used across an 
+await
+   --> src\server\debu
+g_server_impl.rs:86:14
+    |
+ 76 |     let mut 
+engine: Option<Debugge
+rEngine> = None;
+    |         
+---------- has type `s
+td::option::Option<Deb
+uggerEngine>` which 
+is not `Send`
+...
+ 86 |             
+.await
+    |              
+^^^^^ await occurs 
+here, with `mut 
+engine` maybe used 
+later
+note: required by a 
+bound in 
+`tokio::spawn`
+   --> C:\Users\HomePC
+\.cargo\registry\src\i
+ndex.crates.io-1949cf8
+c6b5b557f\tokio-1.50.0
+\src\task\spawn.rs:176
+:21
+    |
+174 |     pub fn 
+spawn<F>(future: F) 
+-> 
+JoinHandle<F::Output>
+    |            
+----- required by a 
+bound in this function
+175 |     where
+176 |         F: 
+Future + Send + 
+'static,
+    |                 
+    ^^^^ required by 
+this bound in `spawn`
+
+error: future cannot 
+be sent between 
+threads safely
+   --> src\server\debu
+g_server_impl.rs:45:13
+    |
+ 45 | /             
+tokio::spawn(async 
+move {
+ 46 | |               
+  let _ = handle_conne
+ction(stream, 
+token).await;
+ 47 | |             
+});
+    | 
+|______________^ 
+future created by 
+async block is not 
+`Send`
+    |
+    = help: within 
+`{async block@src\serv
+er\debug_server_impl.r
+s:45:26: 45:36}`, the 
+trait `Send` is not 
+implemented for `Rc<Re
+fCell<Generators>>`
+note: future is not 
+`Send` as this value 
+is used across an 
+await
+   --> src\server\debu
+g_server_impl.rs:86:14
+    |
+ 76 |     let mut 
+engine: Option<Debugge
+rEngine> = None;
+    |         
+---------- has type `s
+td::option::Option<Deb
+uggerEngine>` which 
+is not `Send`
+...
+ 86 |             
+.await
+    |              
+^^^^^ await occurs 
+here, with `mut 
+engine` maybe used 
+later
+note: required by a 
+bound in 
+`tokio::spawn`
+   --> C:\Users\HomePC
+\.cargo\registry\src\i
+ndex.crates.io-1949cf8
+c6b5b557f\tokio-1.50.0
+\src\task\spawn.rs:176
+:21
+    |
+174 |     pub fn 
+spawn<F>(future: F) 
+-> 
+JoinHandle<F::Output>
+    |            
+----- required by a 
+bound in this function
+175 |     where
+176 |         F: 
+Future + Send + 
+'static,
+    |                 
+    ^^^^ required by 
+this bound in `spawn`
+
+error: future cannot 
+be sent between 
+threads safely
+   --> src\server\debu
+g_server_impl.rs:45:13
+    |
+ 45 | /             
+tokio::spawn(async 
+move {
+ 46 | |               
+  let _ = handle_conne
+ction(stream, 
+token).await;
+ 47 | |             
+});
+    | 
+|______________^ 
+future created by 
+async block is not 
+`Send`
+    |
+    = help: within 
+`{async block@src\serv
+er\debug_server_impl.r
+s:45:26: 45:36}`, the 
+trait `Send` is not 
+implemented for `Rc<Re
+fCell<AuthSnapshot>>`
+note: future is not 
+`Send` as this value 
+is used across an 
+await
+   --> src\server\debu
+g_server_impl.rs:86:14
+    |
+ 76 |     let mut 
+engine: Option<Debugge
+rEngine> = None;
+    |         
+---------- has type `s
+td::option::Option<Deb
+uggerEngine>` which 
+is not `Send`
+...
+ 86 |             
+.await
+    |              
+^^^^^ await occurs 
+here, with `mut 
+engine` maybe used 
+later
+note: required by a 
+bound in 
+`tokio::spawn`
+   --> C:\Users\HomePC
+\.cargo\registry\src\i
+ndex.crates.io-1949cf8
+c6b5b557f\tokio-1.50.0
+\src\task\spawn.rs:176
+:21
+    |
+174 |     pub fn 
+spawn<F>(future: F) 
+-> 
+JoinHandle<F::Output>
+    |            
+----- required by a 
+bound in this function
+175 |     where
+176 |         F: 
+Future + Send + 
+'static,
+    |                 
+    ^^^^ required by 
+this bound in `spawn`
+
+error: future cannot 
+be sent between 
+threads safely
+   --> src\server\debu
+g_server_impl.rs:45:13
+    |
+ 45 | /             
+tokio::spawn(async 
+move {
+ 46 | |               
+  let _ = handle_conne
+ction(stream, 
+token).await;
+ 47 | |             
+});
+    | 
+|______________^ 
+future created by 
+async block is not 
+`Send`
+    |
+    = help: within 
+`{async block@src\serv
+er\debug_server_impl.r
+s:45:26: 45:36}`, the 
+trait `Send` is not 
+implemented for 
+`Rc<LedgerSnapshot>`
+note: future is not 
+`Send` as this value 
+is used across an 
+await
+   --> src\server\debu
+g_server_impl.rs:86:14
+    |
+ 76 |     let mut 
+engine: Option<Debugge
+rEngine> = None;
+    |         
+---------- has type `s
+td::option::Option<Deb
+uggerEngine>` which 
+is not `Send`
+...
+ 86 |             
+.await
+    |              
+^^^^^ await occurs 
+here, with `mut 
+engine` maybe used 
+later
+note: required by a 
+bound in 
+`tokio::spawn`
+   --> C:\Users\HomePC
+\.cargo\registry\src\i
+ndex.crates.io-1949cf8
+c6b5b557f\tokio-1.50.0
+\src\task\spawn.rs:176
+:21
+    |
+174 |     pub fn 
+spawn<F>(future: F) 
+-> 
+JoinHandle<F::Output>
+    |            
+----- required by a 
+bound in this function
+175 |     where
+176 |         F: 
+Future + Send + 
+'static,
+    |                 
+    ^^^^ required by 
+this bound in `spawn`
+
+warning: value 
+assigned to 
+`operation` is never 
+read
+   --> 
+src\lib.rs:103:22
+    |
+103 |     
+RequestTimeout { 
+operation: String, 
+timeout_ms: u64 },
+    |                 
+     ^^^^^^^^^
+    |
+    = help: maybe it 
+is overwritten before 
+being read?
+
+warning: value 
+assigned to 
+`timeout_ms` is never 
+read
+   --> 
+src\lib.rs:103:41
+    |
+103 |     
+RequestTimeout { 
+operation: String, 
+timeout_ms: u64 },
+    |                 
+                      
+  ^^^^^^^^^^
+    |
+    = help: maybe it 
+is overwritten before 
+being read?
+
+Some errors have 
+detailed 
+explanations: E0277, 
+E0425, E0433, E0560, 
+E0599, E0609.
+For more information 
+about an error, try 
+`rustc --explain 
+E0277`.
+warning: 
+`soroban-debugger` 
+(lib) generated 9 
+warnings
+error: could not 
+compile 
+`soroban-debugger` 
+(lib) due to 31 
+previous errors; 9 
+warnings emitted

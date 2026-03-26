@@ -668,7 +668,7 @@ fn backoff_delay(base: Duration, max: Duration, attempt: usize) -> Duration {
         return base.min(max);
     }
 
-    let exp = 1u32.saturating_shl((attempt - 1).min(31) as u32);
+    let exp = 2u32.saturating_pow((attempt - 1).min(31) as u32);
     let delay = base.checked_mul(exp).unwrap_or(max).min(max);
     delay
 }

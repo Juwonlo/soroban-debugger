@@ -2,8 +2,12 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "ExecutionOutput",
   "type": "object",
-  "required": ["status", "result", "sha256", "budget", "storage_diff"],
+  "required": ["schema_version", "status", "result", "sha256", "budget", "storage_diff"],
   "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+$"
+    },
     "status": {
       "type": "string",
       "enum": ["success", "error"]

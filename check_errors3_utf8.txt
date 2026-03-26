@@ -1,0 +1,928 @@
+﻿cargo :     Checking 
+soroban-debugger 
+v0.1.0 (C:\Users\HomeP
+C\Desktop\DRIPS 
+W3\soroban-debugger)
+At line:1 char:1
++ cargo check 
+--all-targets 
+--all-features > 
+check_errors3.txt 
+2>&1 ; p ...
++ ~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~
+~
+    + CategoryInfo    
+          : NotSpeci  
+  fied: (    Checki   
+ ng so...roban-deb    
+ugger):String) []    
+, RemoteException
+    + FullyQualifiedE 
+   rrorId : NativeCo  
+  mmandError
+ 
+error[E0433]: failed 
+to resolve: could not 
+find `Renderer` in 
+`flamegraph`
+  --> src\profiler\fla
+megraph.rs:81:49
+   |
+81 |         let mut 
+renderer = inferno::fl
+amegraph::Renderer::de
+fault()
+   |                  
+                      
+         ^^^^^^^^ 
+could not find 
+`Renderer` in 
+`flamegraph`
+
+warning: unused 
+import: 
+`FunctionProfile`
+ --> src\profiler\flam
+egraph.rs:1:33
+  |
+1 | use crate::profile
+r::analyzer::{Function
+Profile, 
+OptimizationReport};
+  |                   
+              
+^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unus
+ed_imports)]` (part 
+of `#[warn(unused)]`) 
+on by default
+
+warning: unused 
+import: 
+`std::io::Write`
+ --> src\profiler\flam
+egraph.rs:3:5
+  |
+3 | use 
+std::io::Write;
+  |     ^^^^^^^^^^^^^^
+
+warning: unused 
+import: 
+`std::io::Write`
+ --> src\profiler\flam
+egraph.rs:3:5
+  |
+3 | use 
+std::io::Write;
+  |     ^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unus
+ed_imports)]` (part 
+of `#[warn(unused)]`) 
+on by default
+
+error[E0560]: struct 
+`SecurityFinding` has 
+no field named 
+`context`
+   --> src\analyzer\se
+curity.rs:525:13
+    |
+525 |             
+context: None,
+    |             
+^^^^^^^ 
+`SecurityFinding` 
+does not have this 
+field
+    |
+    = note: available 
+fields are: 
+`rationale`
+
+error[E0599]: no 
+function or 
+associated item named 
+`is_guarded` found 
+for struct `security::
+ArithmeticCheckRule` 
+in the current scope
+    --> src\analyzer\s
+ecurity.rs:1278:39
+     |
+ 299 | struct 
+ArithmeticCheckRule;
+     | ---------------
+----------- function 
+or associated item 
+`is_guarded` not 
+found for this struct
+...
+1278 |         assert!
+(!ArithmeticCheckRule:
+:is_guarded(&instrs, 
+0));
+     |                
+                      
+ ^^^^^^^^^^ function 
+or associated item 
+not found in `security
+::ArithmeticCheckRule`
+
+error[E0599]: no 
+function or 
+associated item named 
+`is_guarded` found 
+for struct `security::
+ArithmeticCheckRule` 
+in the current scope
+    --> src\analyzer\s
+ecurity.rs:1285:38
+     |
+ 299 | struct 
+ArithmeticCheckRule;
+     | ---------------
+----------- function 
+or associated item 
+`is_guarded` not 
+found for this struct
+...
+1285 |         assert!
+(ArithmeticCheckRule::
+is_guarded(&instrs, 
+0));
+     |                
+                      
+^^^^^^^^^^ function 
+or associated item 
+not found in `security
+::ArithmeticCheckRule`
+
+error[E0599]: no 
+function or 
+associated item named 
+`is_guarded` found 
+for struct `security::
+ArithmeticCheckRule` 
+in the current scope
+    --> src\analyzer\s
+ecurity.rs:1292:38
+     |
+ 299 | struct 
+ArithmeticCheckRule;
+     | ---------------
+----------- function 
+or associated item 
+`is_guarded` not 
+found for this struct
+...
+1292 |         assert!
+(ArithmeticCheckRule::
+is_guarded(&instrs, 
+0));
+     |                
+                      
+^^^^^^^^^^ function 
+or associated item 
+not found in `security
+::ArithmeticCheckRule`
+
+error[E0599]: no 
+function or 
+associated item named 
+`is_guarded` found 
+for struct `security::
+ArithmeticCheckRule` 
+in the current scope
+    --> src\analyzer\s
+ecurity.rs:1305:38
+     |
+ 299 | struct 
+ArithmeticCheckRule;
+     | ---------------
+----------- function 
+or associated item 
+`is_guarded` not 
+found for this struct
+...
+1305 |         assert!
+(ArithmeticCheckRule::
+is_guarded(&instrs, 
+0));
+     |                
+                      
+^^^^^^^^^^ function 
+or associated item 
+not found in `security
+::ArithmeticCheckRule`
+
+error[E0599]: no 
+function or 
+associated item named 
+`is_guarded` found 
+for struct `security::
+ArithmeticCheckRule` 
+in the current scope
+    --> src\analyzer\s
+ecurity.rs:1321:39
+     |
+ 299 | struct 
+ArithmeticCheckRule;
+     | ---------------
+----------- function 
+or associated item 
+`is_guarded` not 
+found for this struct
+...
+1321 |         assert!
+(!ArithmeticCheckRule:
+:is_guarded(&instrs, 
+0));
+     |                
+                      
+ ^^^^^^^^^^ function 
+or associated item 
+not found in `security
+::ArithmeticCheckRule`
+
+error[E0599]: no 
+function or 
+associated item named 
+`is_guarded` found 
+for struct `security::
+ArithmeticCheckRule` 
+in the current scope
+    --> src\analyzer\s
+ecurity.rs:1332:39
+     |
+ 299 | struct 
+ArithmeticCheckRule;
+     | ---------------
+----------- function 
+or associated item 
+`is_guarded` not 
+found for this struct
+...
+1332 |         assert!
+(!ArithmeticCheckRule:
+:is_guarded(&instrs, 
+1));
+     |                
+                      
+ ^^^^^^^^^^ function 
+or associated item 
+not found in `security
+::ArithmeticCheckRule`
+
+error[E0599]: no 
+function or 
+associated item named 
+`is_guarded` found 
+for struct `security::
+ArithmeticCheckRule` 
+in the current scope
+    --> src\analyzer\s
+ecurity.rs:1342:39
+     |
+ 299 | struct 
+ArithmeticCheckRule;
+     | ---------------
+----------- function 
+or associated item 
+`is_guarded` not 
+found for this struct
+...
+1342 |         assert!
+(!ArithmeticCheckRule:
+:is_guarded(&before, 
+1));
+     |                
+                      
+ ^^^^^^^^^^ function 
+or associated item 
+not found in `security
+::ArithmeticCheckRule`
+
+error[E0599]: no 
+function or 
+associated item named 
+`is_guarded` found 
+for struct `security::
+ArithmeticCheckRule` 
+in the current scope
+    --> src\analyzer\s
+ecurity.rs:1346:39
+     |
+ 299 | struct 
+ArithmeticCheckRule;
+     | ---------------
+----------- function 
+or associated item 
+`is_guarded` not 
+found for this struct
+...
+1346 |         assert!
+(!ArithmeticCheckRule:
+:is_guarded(&after, 
+0));
+     |                
+                      
+ ^^^^^^^^^^ function 
+or associated item 
+not found in `security
+::ArithmeticCheckRule`
+
+error[E0599]: no 
+function or 
+associated item named 
+`is_guarded` found 
+for struct `security::
+ArithmeticCheckRule` 
+in the current scope
+    --> src\analyzer\s
+ecurity.rs:1354:39
+     |
+ 299 | struct 
+ArithmeticCheckRule;
+     | ---------------
+----------- function 
+or associated item 
+`is_guarded` not 
+found for this struct
+...
+1354 |         assert!
+(!ArithmeticCheckRule:
+:is_guarded(&both, 
+1));
+     |                
+                      
+ ^^^^^^^^^^ function 
+or associated item 
+not found in `security
+::ArithmeticCheckRule`
+
+error[E0599]: no 
+function or 
+associated item named 
+`is_guarded` found 
+for struct `security::
+ArithmeticCheckRule` 
+in the current scope
+    --> src\analyzer\s
+ecurity.rs:1367:38
+     |
+ 299 | struct 
+ArithmeticCheckRule;
+     | ---------------
+----------- function 
+or associated item 
+`is_guarded` not 
+found for this struct
+...
+1367 |         assert!
+(ArithmeticCheckRule::
+is_guarded(&instrs, 
+0));
+     |                
+                      
+^^^^^^^^^^ function 
+or associated item 
+not found in `security
+::ArithmeticCheckRule`
+
+error[E0599]: no 
+function or 
+associated item named 
+`is_guarded` found 
+for struct `security::
+ArithmeticCheckRule` 
+in the current scope
+    --> src\analyzer\s
+ecurity.rs:1375:39
+     |
+ 299 | struct 
+ArithmeticCheckRule;
+     | ---------------
+----------- function 
+or associated item 
+`is_guarded` not 
+found for this struct
+...
+1375 |         assert!
+(!ArithmeticCheckRule:
+:is_guarded(&instrs, 
+1));
+     |                
+                      
+ ^^^^^^^^^^ function 
+or associated item 
+not found in `security
+::ArithmeticCheckRule`
+
+error[E0308]: 
+mismatched types
+    --> src\analyzer\s
+ecurity.rs:1391:25
+     |
+1391 |             
+call_depth: depth,
+     |                
+         ^^^^^ 
+expected 
+`Option<usize>`, 
+found `u32`
+     |
+     = note: expected 
+enum `std::option::Opt
+ion<usize>`
+                found 
+type `u32`
+
+warning: variable `sto
+rage_calls_outside_loo
+ps` is assigned to, 
+but never used
+   --> src\analyzer\se
+curity.rs:670:9
+    |
+670 |     let mut stor
+age_calls_outside_loop
+s = 0usize;
+    |         ^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^
+^
+    |
+    = note: consider 
+using `_storage_calls_
+outside_loops` instead
+    = note: `#[warn(un
+used_variables)]` 
+(part of 
+`#[warn(unused)]`) on 
+by default
+
+warning: variable `con
+ditional_branches` is 
+assigned to, but 
+never used
+   --> src\analyzer\se
+curity.rs:673:9
+    |
+673 |     let mut 
+conditional_branches 
+= 0usize;
+    |         ^^^^^^^^
+^^^^^^^^^^^^^^^^
+    |
+    = note: consider 
+using `_conditional_br
+anches` instead
+
+warning: value 
+assigned to `storage_c
+alls_outside_loops` 
+is never read
+   --> src\analyzer\se
+curity.rs:748:37
+    |
+748 | ...             
+      storage_calls_ou
+tside_loops += 1;
+    |                 
+      ^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^
+    |
+    = help: maybe it 
+is overwritten before 
+being read?
+    = note: `#[warn(un
+used_assignments)]` 
+(part of 
+`#[warn(unused)]`) on 
+by default
+
+warning: value 
+assigned to `condition
+al_branches` is never 
+read
+   --> src\analyzer\se
+curity.rs:723:29
+    |
+723 | ...             
+      
+conditional_branches 
++= 1;
+    |                 
+      ^^^^^^^^^^^^^^^^
+^^^^^^^^^
+    |
+    = help: maybe it 
+is overwritten before 
+being read?
+
+warning: value 
+assigned to `condition
+al_branches` is never 
+read
+   --> src\analyzer\se
+curity.rs:753:29
+    |
+753 | ...             
+      
+conditional_branches 
++= 1;
+    |                 
+      ^^^^^^^^^^^^^^^^
+^^^^^^^^^
+    |
+    = help: maybe it 
+is overwritten before 
+being read?
+
+error: future cannot 
+be sent between 
+threads safely
+   --> src\server\debu
+g_server_impl.rs:45:13
+    |
+ 45 | /             
+tokio::spawn(async 
+move {
+ 46 | |               
+  let _ = handle_conne
+ction(stream, 
+token).await;
+ 47 | |             
+});
+    | 
+|______________^ 
+future created by 
+async block is not 
+`Send`
+    |
+    = help: within 
+`{async block@src\serv
+er\debug_server_impl.r
+s:45:26: 45:36}`, the 
+trait `Send` is not 
+implemented for `Rc<so
+roban_env_host::host::
+HostImpl>`
+note: future is not 
+`Send` as this value 
+is used across an 
+await
+   --> src\server\debu
+g_server_impl.rs:86:14
+    |
+ 76 |     let mut 
+engine: Option<Debugge
+rEngine> = None;
+    |         
+---------- has type `s
+td::option::Option<Deb
+uggerEngine>` which 
+is not `Send`
+...
+ 86 |             
+.await
+    |              
+^^^^^ await occurs 
+here, with `mut 
+engine` maybe used 
+later
+note: required by a 
+bound in 
+`tokio::spawn`
+   --> C:\Users\HomePC
+\.cargo\registry\src\i
+ndex.crates.io-1949cf8
+c6b5b557f\tokio-1.50.0
+\src\task\spawn.rs:176
+:21
+    |
+174 |     pub fn 
+spawn<F>(future: F) 
+-> 
+JoinHandle<F::Output>
+    |            
+----- required by a 
+bound in this function
+175 |     where
+176 |         F: 
+Future + Send + 
+'static,
+    |                 
+    ^^^^ required by 
+this bound in `spawn`
+
+error: future cannot 
+be sent between 
+threads safely
+   --> src\server\debu
+g_server_impl.rs:45:13
+    |
+ 45 | /             
+tokio::spawn(async 
+move {
+ 46 | |               
+  let _ = handle_conne
+ction(stream, 
+token).await;
+ 47 | |             
+});
+    | 
+|______________^ 
+future created by 
+async block is not 
+`Send`
+    |
+    = help: within 
+`{async block@src\serv
+er\debug_server_impl.r
+s:45:26: 45:36}`, the 
+trait `Send` is not 
+implemented for `Rc<Re
+fCell<Generators>>`
+note: future is not 
+`Send` as this value 
+is used across an 
+await
+   --> src\server\debu
+g_server_impl.rs:86:14
+    |
+ 76 |     let mut 
+engine: Option<Debugge
+rEngine> = None;
+    |         
+---------- has type `s
+td::option::Option<Deb
+uggerEngine>` which 
+is not `Send`
+...
+ 86 |             
+.await
+    |              
+^^^^^ await occurs 
+here, with `mut 
+engine` maybe used 
+later
+note: required by a 
+bound in 
+`tokio::spawn`
+   --> C:\Users\HomePC
+\.cargo\registry\src\i
+ndex.crates.io-1949cf8
+c6b5b557f\tokio-1.50.0
+\src\task\spawn.rs:176
+:21
+    |
+174 |     pub fn 
+spawn<F>(future: F) 
+-> 
+JoinHandle<F::Output>
+    |            
+----- required by a 
+bound in this function
+175 |     where
+176 |         F: 
+Future + Send + 
+'static,
+    |                 
+    ^^^^ required by 
+this bound in `spawn`
+
+error: future cannot 
+be sent between 
+threads safely
+   --> src\server\debu
+g_server_impl.rs:45:13
+    |
+ 45 | /             
+tokio::spawn(async 
+move {
+ 46 | |               
+  let _ = handle_conne
+ction(stream, 
+token).await;
+ 47 | |             
+});
+    | 
+|______________^ 
+future created by 
+async block is not 
+`Send`
+    |
+    = help: within 
+`{async block@src\serv
+er\debug_server_impl.r
+s:45:26: 45:36}`, the 
+trait `Send` is not 
+implemented for `Rc<Re
+fCell<AuthSnapshot>>`
+note: future is not 
+`Send` as this value 
+is used across an 
+await
+   --> src\server\debu
+g_server_impl.rs:86:14
+    |
+ 76 |     let mut 
+engine: Option<Debugge
+rEngine> = None;
+    |         
+---------- has type `s
+td::option::Option<Deb
+uggerEngine>` which 
+is not `Send`
+...
+ 86 |             
+.await
+    |              
+^^^^^ await occurs 
+here, with `mut 
+engine` maybe used 
+later
+note: required by a 
+bound in 
+`tokio::spawn`
+   --> C:\Users\HomePC
+\.cargo\registry\src\i
+ndex.crates.io-1949cf8
+c6b5b557f\tokio-1.50.0
+\src\task\spawn.rs:176
+:21
+    |
+174 |     pub fn 
+spawn<F>(future: F) 
+-> 
+JoinHandle<F::Output>
+    |            
+----- required by a 
+bound in this function
+175 |     where
+176 |         F: 
+Future + Send + 
+'static,
+    |                 
+    ^^^^ required by 
+this bound in `spawn`
+
+error: future cannot 
+be sent between 
+threads safely
+   --> src\server\debu
+g_server_impl.rs:45:13
+    |
+ 45 | /             
+tokio::spawn(async 
+move {
+ 46 | |               
+  let _ = handle_conne
+ction(stream, 
+token).await;
+ 47 | |             
+});
+    | 
+|______________^ 
+future created by 
+async block is not 
+`Send`
+    |
+    = help: within 
+`{async block@src\serv
+er\debug_server_impl.r
+s:45:26: 45:36}`, the 
+trait `Send` is not 
+implemented for 
+`Rc<LedgerSnapshot>`
+note: future is not 
+`Send` as this value 
+is used across an 
+await
+   --> src\server\debu
+g_server_impl.rs:86:14
+    |
+ 76 |     let mut 
+engine: Option<Debugge
+rEngine> = None;
+    |         
+---------- has type `s
+td::option::Option<Deb
+uggerEngine>` which 
+is not `Send`
+...
+ 86 |             
+.await
+    |              
+^^^^^ await occurs 
+here, with `mut 
+engine` maybe used 
+later
+note: required by a 
+bound in 
+`tokio::spawn`
+   --> C:\Users\HomePC
+\.cargo\registry\src\i
+ndex.crates.io-1949cf8
+c6b5b557f\tokio-1.50.0
+\src\task\spawn.rs:176
+:21
+    |
+174 |     pub fn 
+spawn<F>(future: F) 
+-> 
+JoinHandle<F::Output>
+    |            
+----- required by a 
+bound in this function
+175 |     where
+176 |         F: 
+Future + Send + 
+'static,
+    |                 
+    ^^^^ required by 
+this bound in `spawn`
+
+warning: value 
+assigned to 
+`operation` is never 
+read
+   --> 
+src\lib.rs:103:22
+    |
+103 |     
+RequestTimeout { 
+operation: String, 
+timeout_ms: u64 },
+    |                 
+     ^^^^^^^^^
+    |
+    = help: maybe it 
+is overwritten before 
+being read?
+
+warning: value 
+assigned to 
+`timeout_ms` is never 
+read
+   --> 
+src\lib.rs:103:41
+    |
+103 |     
+RequestTimeout { 
+operation: String, 
+timeout_ms: u64 },
+    |                 
+                      
+  ^^^^^^^^^^
+    |
+    = help: maybe it 
+is overwritten before 
+being read?
+
+Some errors have 
+detailed 
+explanations: E0433, 
+E0560.
+For more information 
+about an error, try 
+`rustc --explain 
+E0433`.
+warning: 
+`soroban-debugger` 
+(lib) generated 9 
+warnings
+error: could not 
+compile 
+`soroban-debugger` 
+(lib) due to 6 
+previous errors; 9 
+warnings emitted
+warning: build 
+failed, waiting for 
+other jobs to 
+finish...
+Some errors have 
+detailed 
+explanations: E0308, 
+E0433, E0560, E0599.
+For more information 
+about an error, try 
+`rustc --explain 
+E0308`.
+warning: 
+`soroban-debugger` 
+(lib test) generated 
+8 warnings (7 
+duplicates)
+error: could not 
+compile 
+`soroban-debugger` 
+(lib test) due to 18 
+previous errors; 8 
+warnings emitted
