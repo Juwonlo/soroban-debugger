@@ -355,11 +355,20 @@ npm run vscode:prepublish
 │   └── cli/
 │       └── debuggerProcess.ts # CLI process wrapper
 │   ├── test/
-│   │   └── runTest.ts        # Extension smoke test
+│   │   ├── runSmokeTest.ts   # Smoke test entrypoint
+│   │   ├── runDapE2E.ts      # DAP end-to-end entrypoint
+│   │   ├── runTest.ts        # Combined compatibility wrapper
+│   │   └── suites.ts         # Shared test suite helpers
 ├── package.json              # Extension manifest
 ├── tsconfig.json            # TypeScript configuration
 └── README.md                # This file
 ```
+
+### Running Tests
+
+- `npm test` runs the smoke suite and the DAP end-to-end suite sequentially.
+- `npm run test:smoke` runs the smoke checks only.
+- `npm run test:dap-e2e` runs the DAP adapter end-to-end suite only.
 
 ## Contributing
 

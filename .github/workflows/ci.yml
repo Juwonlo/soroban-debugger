@@ -66,7 +66,7 @@ jobs:
         run: cargo test --workspace --all-features
 
   vscode-extension:
-    name: VS Code Extension (E2E)
+    name: VS Code Extension
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -90,8 +90,11 @@ jobs:
       - name: Install extension dependencies
         run: npm --prefix extensions/vscode ci
 
-      - name: Run extension tests (includes DAP E2E)
-        run: npm --prefix extensions/vscode test
+      - name: Run extension smoke tests
+        run: npm --prefix extensions/vscode run test:smoke
+
+      - name: Run extension DAP E2E tests
+        run: npm --prefix extensions/vscode run test:dap-e2e
 
   lint:
     name: Lint (Clippy & Format)

@@ -46,6 +46,7 @@ impl DebugServer {
             tokio::task::spawn_local(async move {
                 let _ = handle_connection(stream, token).await;
             });
+            let _ = handle_connection(stream, token).await;
         }
     }
 }

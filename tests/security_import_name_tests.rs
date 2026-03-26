@@ -77,6 +77,8 @@ fn has_cross_contract_import_finding(wasm: &[u8]) -> bool {
     let report = analyzer
         .analyze(wasm, None, None, &AnalyzerFilter::default())
         .expect("analysis failed");
+    let filter = AnalyzerFilter::default();
+    let report = analyzer.analyze(wasm, None, None, &filter).expect("analysis failed");
     report
         .findings
         .iter()

@@ -1,8 +1,6 @@
 use crate::analyzer::upgrade::{CompatibilityReport, ExecutionDiff, UpgradeAnalyzer};
-use crate::analyzer::{
-    security::{AnalyzerFilter, SecurityAnalyzer, Severity},
-    symbolic::{SymbolicAnalyzer, SymbolicConfig},
-};
+use crate::analyzer::security::{AnalyzerFilter, SecurityAnalyzer, Severity};
+use crate::analyzer::symbolic::{SymbolicAnalyzer, SymbolicConfig};
 use crate::cli::args::{
     AnalyzeArgs, CompareArgs, HistoryPruneArgs, InspectArgs, InteractiveArgs, OptimizeArgs,
     ProfileArgs, RemoteArgs, ReplArgs, ReplayArgs, RunArgs, ScenarioArgs, ServerArgs, SymbolicArgs,
@@ -212,7 +210,6 @@ fn render_security_report(output: &AnalyzeCommandOutput) -> String {
     lines.join("\n")
 }
 
-/// Run instruction-level stepping mode.
 fn run_instruction_stepping(
     engine: &mut DebuggerEngine,
     function: &str,
@@ -1861,7 +1858,7 @@ pub fn server(args: ServerArgs) -> Result<()> {
         "Starting remote debug server on port {}",
         args.port
     ));
-    if args.token.is_some() {
+    if let Some(token) = &args.token {
         print_info("Token authentication enabled");
         if args.token.as_deref().unwrap_or("").trim().len() < 16 {
             print_warning(

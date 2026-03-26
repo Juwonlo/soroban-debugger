@@ -50,8 +50,10 @@ fn wasm_with_single_i32_function(param_count: u8, locals: &[(u32, u8)], ops: &[u
 }
 
 fn arithmetic_findings(wasm: &[u8]) -> Vec<soroban_debugger::analyzer::security::SecurityFinding> {
+    let filter = AnalyzerFilter::default();
     SecurityAnalyzer::new()
         .analyze(wasm, None, None, &AnalyzerFilter::default())
+        .analyze(wasm, None, None, &filter)
         .expect("analysis failed")
         .findings
         .into_iter()
@@ -138,8 +140,10 @@ fn test_ignores_call_guarded_arithmetic() {
     // Call is intentionally not treated as an arithmetic guard.
     let wasm = vec![0x10, 0x6A];
     let analyzer = SecurityAnalyzer::new();
+    let filter = AnalyzerFilter::default();
     let report = analyzer
         .analyze(&wasm, None, None, &AnalyzerFilter::default())
+        .analyze(&wasm, None, None, &filter)
         .expect("analysis failed");
 
     let arithmetic_findings: Vec<_> = report

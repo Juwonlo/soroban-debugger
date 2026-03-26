@@ -148,7 +148,10 @@
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile",
-    "test": "node ./dist/test/runTest.js",
+    "test": "npm run test:smoke && npm run test:dap-e2e",
+    "test:all": "node ./dist/test/runTest.js",
+    "test:smoke": "node ./dist/test/runSmokeTest.js",
+    "test:dap-e2e": "node ./dist/test/runDapE2E.js",
     "build": "npm run compile"
   },
   "devDependencies": {
