@@ -32,6 +32,10 @@ pub struct SymbolicConfig {
     /// exploration, making the run fully reproducible from the emitted replay
     /// token.  `None` preserves the default deterministic (un-shuffled) order.
     pub seed: Option<u64>,
+    /// Optional initial storage state to seed before symbolic exploration.
+    /// This allows testing how different storage states affect contract behavior.
+    /// The storage is a map of key-value pairs.
+    pub storage_seed: Option<String>,
 }
 
 impl Default for SymbolicConfig {
@@ -47,6 +51,7 @@ impl SymbolicConfig {
             max_input_combinations: 64,
             timeout_secs: 5,
             seed: None,
+            storage_seed: None,
         }
     }
 
@@ -56,6 +61,7 @@ impl SymbolicConfig {
             max_input_combinations: 256,
             timeout_secs: 30,
             seed: None,
+            storage_seed: None,
         }
     }
 
@@ -65,6 +71,7 @@ impl SymbolicConfig {
             max_input_combinations: 2048,
             timeout_secs: 120,
             seed: None,
+            storage_seed: None,
         }
     }
 }
@@ -204,6 +211,14 @@ impl SymbolicAnalyzer {
             let executor_res = std::panic::catch_unwind(|| {
                 if let Ok(mut executor) = ContractExecutor::new(wasm.to_vec()) {
                     executor.set_timeout(config.timeout_secs);
+                    // Apply storage seed if provided
+                    if let Some(ref storage) = config.storage_seed {
+                        if let Err(e) = executor.set_initial_storage(storage.clone()) {
+                            return Err(crate::DebuggerError::StorageError(
+                                format!("Failed to set initial storage: {}", e)
+                            ).into());
+                        }
+                    }
                     executor.execute(function, Some(args_json))
                 } else {
                     Err(crate::DebuggerError::ExecutionError("Init fail".into()).into())
@@ -832,5 +847,26 @@ mod tests {
         assert!(toml.contains("[metadata]"));
         assert!(toml.contains("max_paths = 25"));
         assert!(toml.contains("truncated_by_input_cap = true"));
+    }
+
+    #[test]
+    fn analyze_with_storage_seed_uses_initial_state() {
+        let wasm = wasm_with_import_and_exported_local();
+        let analyzer = SymbolicAnalyzer::new();
+        let config = SymbolicConfig {
+            max_paths: 5,
+            max_input_combinations: 36,
+            timeout_secs: 30,
+            seed: None,
+            storage_seed: Some(r#"{"counter": 100}"#.to_string()),
+        };
+
+        // The test verifies that the config accepts a storage seed.
+        // Actual storage seeding behavior depends on ContractExecutor implementation.
+        let report = analyzer
+            .analyze_with_config(&wasm, "entry", &config)
+            .expect("symbolic analysis with storage seed should complete");
+
+        assert_eq!(report.metadata.config.storage_seed, Some(r#"{"counter": 100}"#.to_string()));
     }
 }

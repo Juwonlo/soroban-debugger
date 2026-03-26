@@ -1,8 +1,7 @@
 use crate::analyzer::security::{AnalyzerFilter, RuleMetadata, SecurityAnalyzer, Severity};
 use crate::analyzer::symbolic::{SymbolicAnalyzer, SymbolicConfig};
 use crate::analyzer::upgrade::{CompatibilityReport, ExecutionDiff, UpgradeAnalyzer};
-use crate::analyzer::security::{AnalyzerFilter, SecurityAnalyzer, Severity};
-use crate::analyzer::symbolic::{SymbolicAnalyzer, SymbolicConfig};
+use crate::analyzer::{security::{AnalyzerFilter, SecurityAnalyzer, Severity}, symbolic::{SymbolicAnalyzer, SymbolicConfig}};
 use crate::cli::args::{
     AnalyzeArgs, CompareArgs, HistoryPruneArgs, InspectArgs, InteractiveArgs, OptimizeArgs,
     ProfileArgs, RemoteArgs, ReplArgs, ReplayArgs, RunArgs, ScenarioArgs, ServerArgs, SymbolicArgs,
@@ -154,6 +153,17 @@ fn symbolic_config_from_args(args: &SymbolicArgs) -> SymbolicConfig {
     }
     // --replay is a user-facing alias for --seed (both set the exploration seed).
     config.seed = args.seed.or(args.replay);
+    
+    // Load storage seed from file if provided
+    if let Some(ref storage_path) = args.storage_seed {
+        let storage_json = std::fs::read_to_string(storage_path)
+            .unwrap_or_else(|e| {
+                eprintln!("Failed to read storage seed file {:?}: {}", storage_path, e);
+                std::process::exit(1);
+            });
+        config.storage_seed = Some(storage_json);
+    }
+    
     config
 }
 

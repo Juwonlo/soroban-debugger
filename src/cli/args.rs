@@ -1118,6 +1118,12 @@ pub struct SymbolicArgs {
     /// `--seed <TOKEN>`.  Mutually exclusive with `--seed`.
     #[arg(long, value_name = "TOKEN", conflicts_with = "seed")]
     pub replay: Option<u64>,
+
+    /// Path to a JSON file containing initial storage state to seed before
+    /// symbolic exploration. This allows testing how different storage states
+    /// affect contract behavior. The JSON should be a map of key-value pairs.
+    #[arg(long, value_name = "FILE")]
+    pub storage_seed: Option<PathBuf>,
 }
 
 #[derive(Parser)]
