@@ -742,6 +742,19 @@ fn render_execution(f: &mut Frame, app: &mut DashboardApp, area: Rect) {
         ]),
     ];
 
+    // Show paused file/line if available
+    if paused {
+        if let Some(loc) = app.engine.current_source_location() {
+            let file = loc.file.display();
+            let line = loc.line;
+            let col = loc.column.map(|c| format!(":{}", c)).unwrap_or_default();
+            lines.push(Line::from(vec![
+                Span::styled("Paused at: ", Style::default().fg(COLOR_TEXT_DIM)),
+                Span::styled(format!("{}:{}{}", file, line, col), Style::default().fg(COLOR_YELLOW)),
+            ]));
+        }
+    }
+
     if let Some(result) = &app.last_result {
         lines.push(Line::from(vec![
             Span::styled("Result: ", Style::default().fg(COLOR_TEXT_DIM)),

@@ -286,6 +286,13 @@ Always validate inputs and state conditions before performing storage reads or h
 
 ## 6. Optimization Pattern 4: Unbounded Iterations
 
+The security analyzer now keeps two separate signals here:
+
+- `unbounded-iteration` for storage-read-heavy traversal patterns
+- `storage-write-pressure` for write-heavy loops and repeated mutation of hot keys
+
+That split matters because a contract can be safe from read-driven iteration risk and still burn budget by rewriting the same state over and over inside a loop.
+
 ### The problem
 
 Iterating over a `Vec` or a range of storage keys with no upper bound makes your function's budget consumption proportional to data size. As state grows, the function eventually hits the CPU limit and becomes uncallable.

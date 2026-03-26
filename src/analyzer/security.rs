@@ -6,17 +6,12 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use wasmparser::{Operator, Parser, Payload};
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Default)]
 pub enum Severity {
+    #[default]
     Low,
     Medium,
     High,
-}
-
-impl Default for Severity {
-    fn default() -> Self {
-        Severity::Low
-    }
 }
 
 #[derive(Debug, Default, Clone)]
@@ -39,14 +34,35 @@ pub struct SecurityFinding {
     pub rationale: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RuleMetadata {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub severity: Severity,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SecurityReport {
     pub findings: Vec<SecurityFinding>,
+    pub rules: HashMap<String, RuleMetadata>,
 }
 
 pub trait SecurityRule {
+    fn id(&self) -> &str;
     fn name(&self) -> &str;
     fn description(&self) -> &str;
+    fn severity(&self) -> Severity;
+
+    fn metadata(&self) -> RuleMetadata {
+        RuleMetadata {
+            id: self.id().to_string(),
+            name: self.name().to_string(),
+            description: self.description().to_string(),
+            severity: self.severity(),
+        }
+    }
+
     fn analyze_static(&self, _wasm_bytes: &[u8]) -> Result<Vec<SecurityFinding>> {
         Ok(vec![])
     }
@@ -73,6 +89,7 @@ impl SecurityAnalyzer {
                 Box::new(ReentrancyPatternRule),
                 Box::new(CrossContractImportRule),
                 Box::new(UnboundedIterationRule),
+                Box::new(StorageWritePressureRule),
             ],
         }
     }
@@ -87,29 +104,37 @@ impl SecurityAnalyzer {
         let mut report = SecurityReport::default();
 
         for rule in &self.rules {
-            let name = rule.name();
+            let id = rule.id();
             
-            if !filter.enable_rules.is_empty() && !filter.enable_rules.iter().any(|r| r == name) {
+            if !filter.enable_rules.is_empty() && !filter.enable_rules.iter().any(|r| r == id) {
                 continue;
             }
-            if filter.disable_rules.iter().any(|r| r == name) {
+            if filter.disable_rules.iter().any(|r| r == id) {
                 continue;
             }
 
             let static_findings = rule.analyze_static(wasm_bytes)?;
-            report.findings.extend(
-                static_findings
-                    .into_iter()
-                    .filter(|f| f.severity >= filter.min_severity),
-            );
+            let filtered_static: Vec<_> = static_findings
+                .into_iter()
+                .filter(|f| f.severity >= filter.min_severity)
+                .collect();
+            
+            if !filtered_static.is_empty() {
+                report.rules.insert(id.to_string(), rule.metadata());
+                report.findings.extend(filtered_static);
+            }
 
             if let Some(tr) = trace {
                 let dynamic_findings = rule.analyze_dynamic(executor, tr)?;
-                report.findings.extend(
-                    dynamic_findings
-                        .into_iter()
-                        .filter(|f| f.severity >= filter.min_severity),
-                );
+                let filtered_dynamic: Vec<_> = dynamic_findings
+                    .into_iter()
+                    .filter(|f| f.severity >= filter.min_severity)
+                    .collect();
+                
+                if !filtered_dynamic.is_empty() {
+                    report.rules.insert(id.to_string(), rule.metadata());
+                    report.findings.extend(filtered_dynamic);
+                }
             }
         }
 
@@ -212,11 +237,20 @@ fn is_valid_strkey(s: &str) -> bool {
 
 struct HardcodedAddressRule;
 impl SecurityRule for HardcodedAddressRule {
-    fn name(&self) -> &str {
+    fn id(&self) -> &str {
         "hardcoded-address"
     }
+
+    fn name(&self) -> &str {
+        "Hardcoded Address detector"
+    }
+
     fn description(&self) -> &str {
         "Detects hardcoded Stellar addresses in WASM data sections."
+    }
+
+    fn severity(&self) -> Severity {
+        Severity::Medium
     }
 
     fn analyze_static(&self, wasm_bytes: &[u8]) -> Result<Vec<SecurityFinding>> {
@@ -238,7 +272,7 @@ impl SecurityRule for HardcodedAddressRule {
                             && is_valid_strkey(word)
                         {
                             findings.push(SecurityFinding {
-                                rule_id: self.name().to_string(),
+                                rule_id: self.id().to_string(),
                                 severity: Severity::Medium,
                                 location: "Data Section".to_string(),
                                 description: format!("Found potential hardcoded address: {}", word),
@@ -260,8 +294,12 @@ impl SecurityRule for HardcodedAddressRule {
 
 struct ArithmeticCheckRule;
 impl SecurityRule for ArithmeticCheckRule {
-    fn name(&self) -> &str {
+    fn id(&self) -> &str {
         "arithmetic-overflow"
+    }
+
+    fn name(&self) -> &str {
+        "Arithmetic Overflow detector"
     }
 
     fn description(&self) -> &str {
@@ -298,15 +336,34 @@ impl SecurityRule for ArithmeticCheckRule {
                 .collect(),
         )
     }
+
+    fn is_guarded(instructions: &[WasmInstruction], idx: usize) -> bool {
+        let end = (idx + 4).min(instructions.len());
+        for instr in &instructions[idx + 1..end] {
+            if matches!(instr, WasmInstruction::If | WasmInstruction::BrIf) {
+                return true;
+            }
+        }
+        false
+    }
 }
 
 struct AuthorizationCheckRule;
 impl SecurityRule for AuthorizationCheckRule {
-    fn name(&self) -> &str {
+    fn id(&self) -> &str {
         "missing-auth"
     }
+
+    fn name(&self) -> &str {
+        "Missing Authorization detector"
+    }
+
     fn description(&self) -> &str {
         "Detects sensitive flows missing authorization checks."
+    }
+
+    fn severity(&self) -> Severity {
+        Severity::High
     }
 
     fn analyze_dynamic(
@@ -315,46 +372,70 @@ impl SecurityRule for AuthorizationCheckRule {
         trace: &[DynamicTraceEvent],
     ) -> Result<Vec<SecurityFinding>> {
         let mut findings = Vec::new();
-        let mut auth_sequences = std::collections::HashMap::new();
+        let mut auth_actors_per_frame: std::collections::HashMap<FrameKey, std::collections::HashMap<String, usize>> = std::collections::HashMap::new();
 
-        // First pass: find the earliest authorization event per frame
+        // First pass: find authorized actors per frame
         for entry in trace {
             if entry.kind == DynamicTraceEventKind::Authorization {
                 if let Some(frame) = frame_key_for(entry) {
-                    let seq = auth_sequences.entry(frame).or_insert(entry.sequence);
-                    if entry.sequence < *seq {
-                        *seq = entry.sequence;
+                    let actors = auth_actors_per_frame.entry(frame).or_default();
+                    let addr = entry.address.clone().or_else(|| {
+                        // Legacy fallback
+                        entry.message.split_whitespace()
+                            .find(|w| (w.starts_with('G') || w.starts_with('C')) && w.len() == 56)
+                            .map(|s| s.to_string())
+                    });
+                    if let Some(addr) = addr {
+                        actors.entry(addr).or_insert(entry.sequence);
                     }
                 }
             }
         }
 
-        let mut problematic_storage_writes = Vec::new();
-        // Second pass: check storage writes against their frame's earliest auth
+        let mut problematic_writes = Vec::new();
+        // Second pass: check storage writes
         for entry in trace {
             if entry.kind == DynamicTraceEventKind::StorageWrite {
                 if let Some(frame) = frame_key_for(entry) {
-                    if let Some(&auth_seq) = auth_sequences.get(&frame) {
-                        if entry.sequence < auth_seq {
-                            problematic_storage_writes.push(entry.clone());
+                    if let Some(authorized_actors) = auth_actors_per_frame.get(&frame) {
+                        let earliest_auth = authorized_actors.values().min().cloned().unwrap_or(usize::MAX);
+                        if entry.sequence < earliest_auth {
+                            problematic_writes.push((entry.clone(), format!("Storage mutation detected before any authorization in frame '{}'.", frame.function.as_deref().unwrap_or("unknown"))));
+                        } else if let Some(key) = &entry.storage_key {
+                            let covered = authorized_actors.keys().any(|addr| key.contains(addr));
+                            if !covered && !authorized_actors.is_empty() {
+                                problematic_writes.push((entry.clone(), format!(
+                                    "Storage mutation to key '{}' detected without authorization for a relevant actor in frame '{}'. Authorized actors: {:?}",
+                                    key,
+                                    frame.function.as_deref().unwrap_or("unknown"),
+                                    authorized_actors.keys().collect::<Vec<_>>()
+                                )));
+                            }
                         }
                     } else {
-                        // No auth seen ever in this frame
-                        problematic_storage_writes.push(entry.clone());
+                        problematic_writes.push((entry.clone(), format!("Storage mutation detected without any preceding authorization in frame '{}'.", frame.function.as_deref().unwrap_or("unknown"))));
                     }
                 } else {
-                    // Storage write with no frame tracking
-                    problematic_storage_writes.push(entry.clone());
+                    problematic_writes.push((entry.clone(), "Storage mutation detected without frame metadata or preceding authorization.".to_string()));
                 }
             }
         }
 
         // If we have storage writes without preceding auth in the same scope, report a finding
         if !problematic_storage_writes.is_empty() {
-            let details: Vec<String> = problematic_storage_writes.iter().take(3).map(|e| {
-                format!("Seq {}: Write in {} at depth {}", e.sequence, e.function.as_deref().unwrap_or("unknown"), e.call_depth.unwrap_or(0))
-            }).collect();
-            
+            let details: Vec<String> = problematic_storage_writes
+                .iter()
+                .take(3)
+                .map(|e| {
+                    format!(
+                        "Seq {}: Write in {} at depth {}",
+                        e.sequence,
+                        e.function.as_deref().unwrap_or("unknown"),
+                        e.call_depth.unwrap_or(0)
+                    )
+                })
+                .collect();
+
             let description = format!(
                 "Storage mutation detected without preceding authorization in the same call frame. Found {} storage write(s) occurring outside authorized scope. Examples: {}",
                 problematic_storage_writes.len(),
@@ -362,7 +443,7 @@ impl SecurityRule for AuthorizationCheckRule {
             );
 
             findings.push(SecurityFinding {
-                rule_id: self.name().to_string(),
+                rule_id: self.id().to_string(),
                 severity: Severity::High,
                 location: "Dynamic trace".to_string(),
                 description,
@@ -371,18 +452,26 @@ impl SecurityRule for AuthorizationCheckRule {
                 rationale: None,
             });
         }
-
         Ok(findings)
     }
 }
 
 struct ReentrancyPatternRule;
 impl SecurityRule for ReentrancyPatternRule {
-    fn name(&self) -> &str {
+    fn id(&self) -> &str {
         "reentrancy-pattern"
     }
+
+    fn name(&self) -> &str {
+        "Reentrancy Pattern detector"
+    }
+
     fn description(&self) -> &str {
         "Detects cross-contract calls followed by storage writes in the same call frame."
+    }
+
+    fn severity(&self) -> Severity {
+        Severity::High
     }
 
     fn analyze_dynamic(
@@ -397,7 +486,7 @@ impl SecurityRule for ReentrancyPatternRule {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct FrameKey {
     function: Option<String>,
-    call_depth: Option<u64>,
+    call_depth: u64,
 }
 
 #[derive(Debug, Clone)]
@@ -410,12 +499,20 @@ struct PendingCrossCall {
 
 struct CrossContractImportRule;
 impl SecurityRule for CrossContractImportRule {
-    fn name(&self) -> &str {
+    fn id(&self) -> &str {
         "cross-contract-import"
+    }
+
+    fn name(&self) -> &str {
+        "Cross-Contract Import detector"
     }
 
     fn description(&self) -> &str {
         "Detects cross-contract host function imports with robust name matching."
+    }
+
+    fn severity(&self) -> Severity {
+        Severity::Low
     }
 
     fn analyze_static(&self, wasm_bytes: &[u8]) -> Result<Vec<SecurityFinding>> {
@@ -449,7 +546,7 @@ impl SecurityRule for CrossContractImportRule {
         }
 
         Ok(vec![SecurityFinding {
-            rule_id: self.name().to_string(),
+            rule_id: self.id().to_string(),
             severity: Severity::Low,
             location: "Import Section".to_string(),
             description: format!(
@@ -514,11 +611,20 @@ fn is_cross_contract_host_import(module: &str, name: &str) -> bool {
 
 struct UnboundedIterationRule;
 impl SecurityRule for UnboundedIterationRule {
-    fn name(&self) -> &str {
+    fn id(&self) -> &str {
         "unbounded-iteration"
     }
+
+    fn name(&self) -> &str {
+        "Unbounded Iteration detector"
+    }
+
     fn description(&self) -> &str {
-        "Detects storage-driven loops and unbounded read patterns."
+        "Detects storage-driven loops and unbounded storage-read patterns."
+    }
+
+    fn severity(&self) -> Severity {
+        Severity::High
     }
 
     fn analyze_static(&self, wasm_bytes: &[u8]) -> Result<Vec<SecurityFinding>> {
@@ -528,11 +634,11 @@ impl SecurityRule for UnboundedIterationRule {
         }
 
         let finding = SecurityFinding {
-            rule_id: self.name().to_string(),
+            rule_id: self.id().to_string(),
             severity: Severity::High,
             location: "WASM code section".to_string(),
             description: format!(
-                "Detected loop(s) with storage-read host calls ({} storage calls while inside loop).",
+                "Detected loop(s) with storage-read host calls ({} storage-read calls while inside loop).",
                 analysis.storage_calls_inside_loops
             ),
             remediation: "Bound iteration over storage-backed collections (pagination, explicit limits, or capped batch size).".to_string(),
@@ -551,7 +657,7 @@ impl SecurityRule for UnboundedIterationRule {
         Ok(analyze_unbounded_iteration_dynamic(trace)
             .into_iter()
             .map(|mut finding| {
-                finding.rule_id = self.name().to_string();
+                finding.rule_id = self.id().to_string();
                 finding
             })
             .collect())
@@ -565,6 +671,15 @@ struct UnboundedStaticSignal {
     confidence: Option<f32>,
     rationale: Option<String>,
     loop_types: Vec<String>,
+    max_nesting_depth: usize,
+}
+
+#[derive(Debug, Default)]
+struct StorageWriteStaticSignal {
+    suspicious: bool,
+    storage_writes_inside_loops: usize,
+    confidence: Option<f32>,
+    rationale: Option<String>,
     max_nesting_depth: usize,
 }
 
@@ -685,7 +800,7 @@ fn analyze_unbounded_iteration_static(wasm_bytes: &[u8]) -> UnboundedStaticSigna
     signal.loop_types = loop_types_seen.into_iter().collect();
 
     // Calculate confidence based on multiple factors
-    let confidence = if storage_calls_in_loops > 0 {
+    signal.confidence = Some(if storage_calls_in_loops > 0 {
         if signal.max_nesting_depth >= 2 && storage_calls_in_loops >= 3 {
             0.9
         } else if signal.max_nesting_depth > 1 || storage_calls_in_loops > 1 {
@@ -695,11 +810,14 @@ fn analyze_unbounded_iteration_static(wasm_bytes: &[u8]) -> UnboundedStaticSigna
         }
     } else {
         0.2
-    };
+    });
 
     signal.rationale = Some(format!(
-        "Storage calls in loops: {}, max nesting depth: {}, loop types with calls: {:?}",
-        storage_calls_in_loops, signal.max_nesting_depth, loop_types_with_calls
+        "Storage-read calls in loops: {}, max nesting depth: {}, loop types with calls: {:?}, calls outside loops: {}",
+        storage_calls_in_loops,
+        signal.max_nesting_depth,
+        loop_types_with_calls,
+        storage_calls_outside_loops
     ));
     let _ = loop_types_with_calls;
     signal.confidence = Some(confidence);
@@ -731,8 +849,48 @@ fn is_storage_read_import(module: &str, name: &str) -> bool {
         if n == *base {
             return true;
         }
-        // Handle prefix-qualified names like "contract_storage_get" or "soroban_storage_has"
+        if let Some(suffix) = n.strip_prefix(base) {
+            if suffix.is_empty() {
+                return true;
+            }
+            if let Some(rest) = suffix.strip_prefix('v') {
+                if !rest.is_empty() && rest.chars().all(|c| c.is_ascii_digit()) {
+                    return true;
+                }
+            }
+        }
+
+        // Handle prefix-qualified names like "contract_storage_get".
         if n.ends_with(base) {
+            return true;
+        }
+    }
+
+    false
+}
+
+fn is_storage_write_import(module: &str, name: &str) -> bool {
+    const BASES: &[&str] = &[
+        "storageput",
+        "storageset",
+        "storagedel",
+        "putcontractdata",
+        "setcontractdata",
+        "delcontractdata",
+        "mapput",
+        "vecput",
+        "vecpushback",
+        "contractstorageput",
+        "contractstorageset",
+    ];
+
+    if !is_env_like_module(module) {
+        return false;
+    }
+
+    let n = canonicalize_ascii(name);
+    for base in BASES {
+        if n == *base {
             return true;
         }
         if let Some(suffix) = n.strip_prefix(base) {
@@ -745,8 +903,6 @@ fn is_storage_read_import(module: &str, name: &str) -> bool {
                 }
             }
         }
-        
-        // Handle prefix-qualified names like "contract_storage_get".
         if n.ends_with(base) {
             return true;
         }
@@ -794,6 +950,208 @@ fn analyze_unbounded_iteration_dynamic(trace: &[DynamicTraceEvent]) -> Option<Se
         remediation: "Use explicit iteration bounds and pagination for storage traversal to avoid gas-denial risks.".to_string(),
         confidence: None,
         rationale: None,
+    })
+}
+
+struct StorageWritePressureRule;
+impl SecurityRule for StorageWritePressureRule {
+    fn name(&self) -> &str {
+        "storage-write-pressure"
+    }
+
+    fn description(&self) -> &str {
+        "Detects loop-driven storage writes and repeated mutation of hot state."
+    }
+
+    fn analyze_static(&self, wasm_bytes: &[u8]) -> Result<Vec<SecurityFinding>> {
+        let analysis = analyze_storage_write_pressure_static(wasm_bytes);
+        if !analysis.suspicious {
+            return Ok(Vec::new());
+        }
+
+        Ok(vec![SecurityFinding {
+            rule_id: self.name().to_string(),
+            severity: Severity::High,
+            location: "WASM code section".to_string(),
+            description: format!(
+                "Detected loop(s) with storage-write host calls ({} storage-write calls while inside loop).",
+                analysis.storage_writes_inside_loops
+            ),
+            remediation: "Coalesce writes in memory, cap mutation batches, and avoid repeated writes to hot keys inside loops.".to_string(),
+            confidence: analysis.confidence,
+            rationale: analysis.rationale,
+        }])
+    }
+
+    fn analyze_dynamic(
+        &self,
+        _executor: Option<&ContractExecutor>,
+        trace: &[DynamicTraceEvent],
+    ) -> Result<Vec<SecurityFinding>> {
+        Ok(analyze_storage_write_pressure_dynamic(trace)
+            .into_iter()
+            .map(|mut finding| {
+                finding.rule_id = self.name().to_string();
+                finding
+            })
+            .collect())
+    }
+}
+
+fn analyze_storage_write_pressure_static(wasm_bytes: &[u8]) -> StorageWriteStaticSignal {
+    let mut storage_import_indices = HashSet::new();
+    let mut imported_func_count = 0u32;
+    let mut control_flow_stack: Vec<ControlFlowFrame> = Vec::new();
+    let mut signal = StorageWriteStaticSignal::default();
+    let mut storage_writes_in_loops = 0usize;
+    let mut storage_writes_outside_loops = 0usize;
+    let mut loop_types_with_writes: HashSet<String> = HashSet::new();
+
+    for payload in Parser::new(0).parse_all(wasm_bytes) {
+        let Ok(payload) = payload else {
+            return signal;
+        };
+
+        match payload {
+            Payload::ImportSection(reader) => {
+                for import in reader.into_iter().flatten() {
+                    if let wasmparser::TypeRef::Func(_) = import.ty {
+                        if is_storage_write_import(import.module, import.name) {
+                            storage_import_indices.insert(imported_func_count);
+                        }
+                        imported_func_count += 1;
+                    }
+                }
+            }
+            Payload::CodeSectionEntry(body) => {
+                let Ok(mut operators) = body.get_operators_reader() else {
+                    continue;
+                };
+
+                while !operators.eof() {
+                    let Ok(op) = operators.read() else {
+                        break;
+                    };
+
+                    match op {
+                        Operator::Loop { .. } => {
+                            let current_depth =
+                                control_flow_stack.iter().filter(|f| f.is_loop()).count();
+                            control_flow_stack.push(ControlFlowFrame::Loop {
+                                loop_type: if current_depth > 0 {
+                                    "nested_loop".to_string()
+                                } else {
+                                    "top_level_loop".to_string()
+                                },
+                            });
+                            signal.max_nesting_depth =
+                                signal.max_nesting_depth.max(current_depth + 1);
+                        }
+                        Operator::Block { .. } => control_flow_stack.push(ControlFlowFrame::Block),
+                        Operator::If { .. } => control_flow_stack.push(ControlFlowFrame::If),
+                        Operator::Else => {}
+                        Operator::End => {
+                            control_flow_stack.pop();
+                        }
+                        Operator::Call { function_index } => {
+                            if !storage_import_indices.contains(&function_index) {
+                                continue;
+                            }
+
+                            if control_flow_stack.iter().any(ControlFlowFrame::is_loop) {
+                                storage_writes_in_loops += 1;
+                                if let Some(loop_frame) =
+                                    control_flow_stack.iter().rev().find(|f| f.is_loop())
+                                {
+                                    if let Some(loop_type) = loop_frame.loop_type() {
+                                        loop_types_with_writes.insert(loop_type.to_string());
+                                    }
+                                }
+                            } else {
+                                storage_writes_outside_loops += 1;
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    signal.storage_writes_inside_loops = storage_writes_in_loops;
+    signal.confidence = Some(
+        if storage_writes_in_loops >= 4 || signal.max_nesting_depth >= 2 {
+            0.9
+        } else if storage_writes_in_loops >= 2 {
+            0.75
+        } else if storage_writes_in_loops == 1 {
+            0.55
+        } else {
+            0.2
+        },
+    );
+    signal.rationale = Some(format!(
+        "Storage-write calls in loops: {}, max nesting depth: {}, loop types with writes: {:?}, writes outside loops: {}",
+        storage_writes_in_loops,
+        signal.max_nesting_depth,
+        loop_types_with_writes,
+        storage_writes_outside_loops
+    ));
+    signal.suspicious = storage_writes_in_loops > 0;
+    signal
+}
+
+fn analyze_storage_write_pressure_dynamic(trace: &[DynamicTraceEvent]) -> Option<SecurityFinding> {
+    let mut write_key_counts: HashMap<&str, usize> = HashMap::new();
+    let mut total_writes = 0usize;
+
+    for entry in trace {
+        if entry.kind == DynamicTraceEventKind::StorageWrite {
+            total_writes += 1;
+            if let Some(key) = entry.storage_key.as_deref() {
+                *write_key_counts.entry(key).or_insert(0) += 1;
+            }
+        }
+    }
+
+    if total_writes == 0 {
+        return None;
+    }
+
+    let unique_keys = write_key_counts.len();
+    let max_writes_for_one_key = write_key_counts.values().copied().max().unwrap_or(0);
+    let repeated_writes = total_writes.saturating_sub(unique_keys);
+    let likely_hot_state_pressure = total_writes >= 32
+        && (max_writes_for_one_key >= 8
+            || repeated_writes >= total_writes / 2
+            || (total_writes >= 64 && unique_keys <= total_writes / 3));
+
+    if !likely_hot_state_pressure {
+        return None;
+    }
+
+    Some(SecurityFinding {
+        rule_id: "storage-write-pressure".to_string(),
+        severity: Severity::High,
+        location: "Dynamic trace".to_string(),
+        description: format!(
+            "Observed high storage-write pressure (writes={}, unique_keys={}, max_writes_single_key={}, repeated_writes={}). This pattern is consistent with loop-driven mutation or repeated writes to hot state.",
+            total_writes,
+            unique_keys,
+            max_writes_for_one_key,
+            repeated_writes
+        ),
+        remediation: "Batch changes in memory, collapse duplicate writes, and bound write-heavy loops to reduce gas-denial risk.".to_string(),
+        confidence: Some(if max_writes_for_one_key >= 16 || total_writes >= 64 {
+            0.9
+        } else {
+            0.75
+        }),
+        rationale: Some(format!(
+            "Repeated writes concentrated on {} unique key(s); hottest key written {} time(s).",
+            unique_keys, max_writes_for_one_key
+        )),
     })
 }
 
@@ -926,8 +1284,12 @@ fn analyze_reentrancy_pattern_dynamic(trace: &[DynamicTraceEvent]) -> Vec<Securi
     findings
 }
 
+fn analyze_reentrancy_dynamic(trace: &[DynamicTraceEvent]) -> Vec<SecurityFinding> {
+    analyze_reentrancy_pattern_dynamic(trace)
+}
+
 fn frame_key_for(entry: &DynamicTraceEvent) -> Option<FrameKey> {
-    if entry.function.is_none() && entry.call_depth.is_none() {
+    if entry.function.is_none() {
         return None;
     }
 
@@ -1217,11 +1579,11 @@ mod tests {
             sequence: seq,
             kind,
             message: String::new(),
+            caller: None,
             function: None,
             storage_key: None,
             storage_value: None,
             call_depth: Some(depth as usize),
-            caller: None,
         }
     }
 
@@ -1315,6 +1677,27 @@ mod tests {
     }
 
     #[test]
+    fn storage_write_pressure_dynamic_flags_hot_state_mutation() {
+        let mut trace = Vec::new();
+        for i in 0..40usize {
+            trace.push(DynamicTraceEvent {
+                sequence: i,
+                kind: DynamicTraceEventKind::StorageWrite,
+                message: "storage_put".to_string(),
+                caller: None,
+                function: Some("rebalance".to_string()),
+                call_depth: Some(0),
+                storage_key: Some(format!("bucket:{}", i % 2)),
+                storage_value: Some(format!("{i}")),
+            });
+        }
+
+        let finding = analyze_storage_write_pressure_dynamic(&trace);
+        assert!(finding.is_some());
+        assert!(matches!(finding.unwrap().severity, Severity::High));
+    }
+
+    #[test]
     fn static_signal_false_for_non_wasm_bytes() {
         let signal = analyze_unbounded_iteration_static(&[1, 2, 3, 4, 5]);
         assert!(!signal.suspicious);
@@ -1333,6 +1716,7 @@ mod tests {
                 call_depth: Some(0),
                 storage_key: None,
                 storage_value: None,
+                address: None,
             },
             DynamicTraceEvent {
                 sequence: 2,
@@ -1344,6 +1728,7 @@ mod tests {
                 call_depth: Some(0),
                 storage_key: None,
                 storage_value: None,
+                address: None,
             },
             DynamicTraceEvent {
                 sequence: 3,
@@ -1355,6 +1740,7 @@ mod tests {
                 call_depth: Some(0),
                 storage_key: Some("balance:alice".to_string()),
                 storage_value: Some("0".to_string()),
+                address: None,
             },
         ]);
 
@@ -1382,6 +1768,7 @@ mod tests {
                 call_depth: Some(0),
                 storage_key: None,
                 storage_value: None,
+                address: None,
             },
             DynamicTraceEvent {
                 sequence: 2,
@@ -1393,6 +1780,7 @@ mod tests {
                 call_depth: Some(0),
                 storage_key: Some("settled:alice".to_string()),
                 storage_value: Some("true".to_string()),
+                address: None,
             },
             DynamicTraceEvent {
                 sequence: 3,
@@ -1404,6 +1792,7 @@ mod tests {
                 call_depth: Some(0),
                 storage_key: None,
                 storage_value: None,
+                address: None,
             },
             DynamicTraceEvent {
                 sequence: 4,
@@ -1415,6 +1804,7 @@ mod tests {
                 call_depth: Some(0),
                 storage_key: Some("audit:last_settle".to_string()),
                 storage_value: Some("1".to_string()),
+                address: None,
             },
         ]);
 
@@ -1434,6 +1824,7 @@ mod tests {
                 call_depth: Some(0),
                 storage_key: None,
                 storage_value: None,
+                address: None,
             },
             DynamicTraceEvent {
                 sequence: 2,
@@ -1445,6 +1836,7 @@ mod tests {
                 call_depth: Some(0),
                 storage_key: None,
                 storage_value: None,
+                address: None,
             },
             DynamicTraceEvent {
                 sequence: 3,
@@ -1456,6 +1848,7 @@ mod tests {
                 call_depth: Some(1),
                 storage_key: Some("receipt:1".to_string()),
                 storage_value: Some("ok".to_string()),
+                address: None,
             },
         ]);
 
@@ -1501,7 +1894,35 @@ mod tests {
     fn storage_read_import_ignores_unrelated_modules() {
         assert!(!is_storage_read_import("not_env", "storage_get"));
         assert!(!is_storage_read_import("mylib", "storage_get"));
-        assert!(!is_storage_read_import("environments", "storage_get"));
+         // -----------------------------------------------------------------------
+    // AuthorizationCheckRule — dynamic trace tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn storage_write_import_detects_known_variants() {
+        let cases = [
+            ("env", "storage_put"),
+            ("env", "storage_set"),
+            ("env", "storage_del"),
+            ("env", "put_contract_data"),
+            ("env", "set_contract_data"),
+            ("soroban_env", "storage_put"),
+            ("soroban-env-host", "storage_set_v2"),
+        ];
+        for (module, name) in cases {
+            assert!(
+                is_storage_write_import(module, name),
+                "expected is_storage_write_import to match {module}::{name}"
+            );
+        }
+    }
+
+    #[test]
+    fn storage_write_import_ignores_read_only_and_unrelated_names() {
+        assert!(!is_storage_write_import("env", "storage_get"));
+        assert!(!is_storage_write_import("env", "reinvoke_storage_setter"));
+        assert!(!is_storage_write_import("env", "invoke_contract"));
+        assert!(!is_storage_write_import("not_env", "storage_put"));
     }
 
     // -----------------------------------------------------------------------
@@ -1511,8 +1932,7 @@ mod tests {
     #[test]
     fn auth_rule_detects_storage_before_auth() {
         let rule = AuthorizationCheckRule;
-
-        // Test case: storage write happens before authorization
+        
         let trace = vec![
             DynamicTraceEvent {
                 sequence: 0,
@@ -1520,9 +1940,10 @@ mod tests {
                 message: "write key1".to_string(),
                 caller: None,
                 function: Some("test_function".to_string()),
-                call_depth: Some(0),
+                call_depth: 0,
                 storage_key: Some("key1".to_string()),
                 storage_value: Some("value1".to_string()),
+                address: None,
             },
             DynamicTraceEvent {
                 sequence: 1,
@@ -1530,25 +1951,23 @@ mod tests {
                 message: "auth check".to_string(),
                 caller: None,
                 function: Some("test_function".to_string()),
-                call_depth: Some(0),
+                call_depth: 0,
                 storage_key: None,
                 storage_value: None,
+                address: None,
             },
         ];
 
         let findings = rule.analyze_dynamic(None, &trace).unwrap();
         assert_eq!(findings.len(), 1);
         assert_eq!(findings[0].rule_id, "missing-auth");
-        assert!(findings[0]
-            .description
-            .contains("1 storage write(s) occurring outside authorized scope"));
+        assert!(findings[0].description.contains("before any authorization in frame 'test_function'"));
     }
 
     #[test]
     fn auth_rule_allows_storage_after_auth() {
         let rule = AuthorizationCheckRule;
-
-        // Test case: authorization happens before storage write (should be OK)
+        
         let trace = vec![
             DynamicTraceEvent {
                 sequence: 0,
@@ -1556,9 +1975,10 @@ mod tests {
                 message: "auth check".to_string(),
                 caller: None,
                 function: Some("test_function".to_string()),
-                call_depth: Some(0),
+                call_depth: 0,
                 storage_key: None,
                 storage_value: None,
+                address: Some("G123...".to_string()),
             },
             DynamicTraceEvent {
                 sequence: 1,
@@ -1566,9 +1986,10 @@ mod tests {
                 message: "write key1".to_string(),
                 caller: None,
                 function: Some("test_function".to_string()),
-                call_depth: Some(0),
-                storage_key: Some("key1".to_string()),
+                call_depth: 0,
+                storage_key: Some("key1:G123...".to_string()),
                 storage_value: Some("value1".to_string()),
+                address: None,
             },
         ];
 
@@ -1579,8 +2000,7 @@ mod tests {
     #[test]
     fn auth_rule_detects_multiple_storage_before_auth() {
         let rule = AuthorizationCheckRule;
-
-        // Test case: multiple storage writes happen before authorization
+        
         let trace = vec![
             DynamicTraceEvent {
                 sequence: 0,
@@ -1588,9 +2008,10 @@ mod tests {
                 message: "write key1".to_string(),
                 caller: None,
                 function: Some("test_function".to_string()),
-                call_depth: Some(0),
+                call_depth: 0,
                 storage_key: Some("key1".to_string()),
                 storage_value: Some("value1".to_string()),
+                address: None,
             },
             DynamicTraceEvent {
                 sequence: 1,
@@ -1598,9 +2019,10 @@ mod tests {
                 message: "write key2".to_string(),
                 caller: None,
                 function: Some("test_function".to_string()),
-                call_depth: Some(0),
+                call_depth: 0,
                 storage_key: Some("key2".to_string()),
                 storage_value: Some("value2".to_string()),
+                address: None,
             },
             DynamicTraceEvent {
                 sequence: 2,
@@ -1608,25 +2030,23 @@ mod tests {
                 message: "auth check".to_string(),
                 caller: None,
                 function: Some("test_function".to_string()),
-                call_depth: Some(0),
+                call_depth: 0,
                 storage_key: None,
                 storage_value: None,
+                address: None,
             },
         ];
 
         let findings = rule.analyze_dynamic(None, &trace).unwrap();
         assert_eq!(findings.len(), 1);
         assert_eq!(findings[0].rule_id, "missing-auth");
-        assert!(findings[0]
-            .description
-            .contains("2 storage write(s) occurring outside authorized scope"));
+        assert!(findings[0].description.contains("before any authorization in frame 'test_function'"));
     }
 
     #[test]
     fn auth_rule_detects_storage_without_any_auth() {
         let rule = AuthorizationCheckRule;
-
-        // Test case: storage writes with no authorization at all
+        
         let trace = vec![
             DynamicTraceEvent {
                 sequence: 0,
@@ -1634,9 +2054,10 @@ mod tests {
                 message: "write key1".to_string(),
                 caller: None,
                 function: Some("test_function".to_string()),
-                call_depth: Some(0),
+                call_depth: 0,
                 storage_key: Some("key1".to_string()),
                 storage_value: Some("value1".to_string()),
+                address: None,
             },
             DynamicTraceEvent {
                 sequence: 1,
@@ -1644,18 +2065,17 @@ mod tests {
                 message: "write key2".to_string(),
                 caller: None,
                 function: Some("test_function".to_string()),
-                call_depth: Some(0),
+                call_depth: 0,
                 storage_key: Some("key2".to_string()),
                 storage_value: Some("value2".to_string()),
+                address: None,
             },
         ];
 
         let findings = rule.analyze_dynamic(None, &trace).unwrap();
         assert_eq!(findings.len(), 1);
         assert_eq!(findings[0].rule_id, "missing-auth");
-        assert!(findings[0]
-            .description
-            .contains("2 storage write(s) occurring outside authorized scope"));
+        assert!(findings[0].description.contains("without any preceding authorization in frame 'test_function'"));
     }
 
     #[test]
@@ -1670,9 +2090,10 @@ mod tests {
                 message: "auth check inside nested".to_string(),
                 caller: None,
                 function: Some("nested_function".to_string()),
+                call_depth: 1,
                 storage_key: None,
                 storage_value: None,
-                call_depth: Some(1),
+                address: None,
             },
             DynamicTraceEvent {
                 sequence: 1,
@@ -1680,17 +2101,51 @@ mod tests {
                 message: "write key1 in main".to_string(),
                 caller: None,
                 function: Some("main_function".to_string()),
+                call_depth: 0,
                 storage_key: Some("key1".to_string()),
                 storage_value: Some("value1".to_string()),
-                call_depth: Some(0),
+                address: None,
             },
         ];
 
         let findings = rule.analyze_dynamic(None, &trace).unwrap();
         assert_eq!(findings.len(), 1);
         assert_eq!(findings[0].rule_id, "missing-auth");
-        assert!(findings[0]
-            .description
-            .contains("Write in main_function at depth 0"));
+        assert!(findings[0].description.contains("without any preceding authorization in frame 'main_function'"));
+    }
+
+    #[test]
+    fn auth_rule_detects_actor_mismatch() {
+        let rule = AuthorizationCheckRule;
+        
+        let trace = vec![
+            DynamicTraceEvent {
+                sequence: 0,
+                kind: DynamicTraceEventKind::Authorization,
+                message: "authorized G_ALICE".to_string(),
+                function: Some("test_function".to_string()),
+                call_depth: 0,
+                address: Some("G_ALICE_ADDRESS_1234567890123456789012345678901234567890123456".to_string()),
+                storage_key: None,
+                storage_value: None,
+                caller: None,
+            },
+            DynamicTraceEvent {
+                sequence: 1,
+                kind: DynamicTraceEventKind::StorageWrite,
+                message: "write G_BOB data".to_string(),
+                function: Some("test_function".to_string()),
+                storage_key: Some("data:G_BOB_ADDRESS_1234567890123456789012345678901234567890123456".to_string()),
+                storage_value: Some("value".to_string()),
+                call_depth: 0,
+                address: None,
+                caller: None,
+            },
+        ];
+
+        let findings = rule.analyze_dynamic(None, &trace).unwrap();
+        assert_eq!(findings.len(), 1);
+        assert!(findings[0].description.contains("without authorization for a relevant actor"));
+        assert!(findings[0].description.contains("G_ALICE_ADDRESS"));
     }
 }

@@ -1,0 +1,61 @@
+﻿cargo :     Checking 
+soroban-debugger 
+v0.1.0 (C:\Users\HomeP
+C\Desktop\DRIPS 
+W3\soroban-debugger)
+At line:1 char:1
++ cargo check 
+--all-targets 
+--all-features > 
+check_errors2.txt 2>&1
++ ~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~
+~
+    + CategoryInfo    
+          : NotSpeci  
+  fied: (    Checki   
+ ng so...roban-deb    
+ugger):String) []    
+, RemoteException
+    + FullyQualifiedE 
+   rrorId : NativeCo  
+  mmandError
+ 
+error: unexpected 
+closing delimiter: `}`
+   --> src\analyzer\se
+curity.rs:626:1
+    |
+579 | impl 
+SecurityRule for Unbou
+ndedIterationRule {
+    |                 
+                      
+       - this 
+delimiter might not 
+be properly closed...
+...
+625 |     }
+    |     - ...as it 
+matches this but it 
+has different 
+indentation
+626 | }
+    | ^ unexpected 
+closing delimiter
+
+error: could not 
+compile 
+`soroban-debugger` 
+(lib) due to 1 
+previous error
+warning: build 
+failed, waiting for 
+other jobs to 
+finish...
+error: could not 
+compile 
+`soroban-debugger` 
+(lib test) due to 1 
+previous error

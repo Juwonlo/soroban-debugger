@@ -29,6 +29,12 @@ pub struct DebuggerEngine {
 }
 
 impl DebuggerEngine {
+        /// Returns the current paused source location (file, line, column) if available.
+        pub fn current_source_location(&self) -> Option<crate::debugger::source_map::SourceLocation> {
+            let state = self.state.lock().ok()?;
+            let inst = state.current_instruction()?;
+            self.lookup_source_location(inst.offset)
+        }
     /// Create a new debugger engine.
     #[tracing::instrument(skip_all)]
     pub fn new(executor: ContractExecutor, initial_breakpoints: Vec<String>) -> Self {

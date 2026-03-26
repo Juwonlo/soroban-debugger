@@ -19,7 +19,7 @@ Soroban contracts are compiled from Rust to WebAssembly (WASM). While debugging 
 - **DWARF Support**: Full support for standard DWARF embedded in WASM.
 - **Source Line Stepping**: Integrated into the stepping logic.
 - **Caching**: Performance optimized with file and mapping caches.
-- **Fallback**: Graceful fallback to WASM-only view if debug info is missing or stripped.
+- **Fallback & Diagnostics**: Graceful fallback to WASM-only view if debug info is missing or stripped. When DWARF metadata is partially malformed, `SourceMap::load` continues to extract valid data and surfaces parsing errors as warnings (`SourceMapDiagnostic`) rather than completely aborting. These diagnostics can be reviewed using `inspect`.
 
 ## Limitations
 

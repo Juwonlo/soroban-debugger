@@ -47,11 +47,7 @@ impl FlameGraphGenerator {
                     stacks.push(FlameGraphStack {
                         stack: vec![
                             function.name.clone(),
-                            format!(
-                                "storage;key{};access_count={}",
-                                idx,
-                                access.1.access_count
-                            ),
+                            format!("storage;key{};access_count={}", idx, access.1.access_count),
                         ],
                         count: access_count,
                     });
@@ -73,19 +69,25 @@ impl FlameGraphGenerator {
         output
     }
 
-    pub fn generate_svg(stacks: &[FlameGraphStack], width: usize, _height: usize) -> Result<String> {
+    pub fn generate_svg(
+        stacks: &[FlameGraphStack],
+        width: usize,
+        _height: usize,
+    ) -> Result<String> {
         let collapsed = Self::to_collapsed_stack_format(stacks);
         let reader = std::io::Cursor::new(collapsed);
 
-        let mut options = inferno::flamegraph::Options::default();
-        options.image_width = Some(width);
-        options.font_size = 12;
+        let mut renderer = inferno::flamegraph::Options::default()
+            .width(width)
+            .height(height)
+            .image_width(width)
+            .font_size(12);
 
         let mut svg = Vec::new();
         inferno::flamegraph::from_reader(&mut options, reader, &mut svg)
             .map_err(|e| crate::DebuggerError::FileError(e.to_string()))?;
 
-        Ok(String::from_utf8(svg).map_err(|e| crate::DebuggerError::FileError(e.to_string()))?)
+        Ok(String::from_utf8(svg).map_err(|e| miette::miette!("Invalid UTF-8 in SVG: {}", e))?)
     }
 
     pub fn write_collapsed_stack_file<P: AsRef<std::path::Path>>(
@@ -93,8 +95,7 @@ impl FlameGraphGenerator {
         path: P,
     ) -> Result<()> {
         let collapsed = Self::to_collapsed_stack_format(stacks);
-        std::fs::write(path, collapsed)
-            .map_err(|e| crate::DebuggerError::FileError(e.to_string()))?;
+        std::fs::write(&path, collapsed).map_err(|e| miette::miette!("Failed to write flamegraph to {:?}: {}", path.as_ref(), e))?;
         Ok(())
     }
 
@@ -105,8 +106,7 @@ impl FlameGraphGenerator {
         height: usize,
     ) -> Result<()> {
         let svg = Self::generate_svg(stacks, width, height)?;
-        std::fs::write(path, svg)
-            .map_err(|e| crate::DebuggerError::FileError(e.to_string()))?;
+        std::fs::write(&path, svg).map_err(|e| miette::miette!("Failed to write SVG to {:?}: {}", path.as_ref(), e))?;
         Ok(())
     }
 }

@@ -1,0 +1,281 @@
+﻿diff --git a/src/analyzer/security.rs b/src/analyzer/security.rs
+index 412ac74..feb5c1c 100644
+--- a/src/analyzer/security.rs
++++ b/src/analyzer/security.rs
+@@ -39,14 +39,35 @@ pub struct SecurityFinding {
+     pub rationale: Option<String>,
+ }
+ 
++#[derive(Debug, Clone, Serialize, Deserialize)]
++pub struct RuleMetadata {
++    pub id: String,
++    pub name: String,
++    pub description: String,
++    pub severity: Severity,
++}
++
+ #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+ pub struct SecurityReport {
+     pub findings: Vec<SecurityFinding>,
++    pub rules: HashMap<String, RuleMetadata>,
+ }
+ 
+ pub trait SecurityRule {
++    fn id(&self) -> &str;
+     fn name(&self) -> &str;
+     fn description(&self) -> &str;
++    fn severity(&self) -> Severity;
++
++    fn metadata(&self) -> RuleMetadata {
++        RuleMetadata {
++            id: self.id().to_string(),
++            name: self.name().to_string(),
++            description: self.description().to_string(),
++            severity: self.severity(),
++        }
++    }
++
+     fn analyze_static(&self, _wasm_bytes: &[u8]) -> Result<Vec<SecurityFinding>> {
+         Ok(vec![])
+     }
+@@ -87,29 +108,37 @@ impl SecurityAnalyzer {
+         let mut report = SecurityReport::default();
+ 
+         for rule in &self.rules {
+-            let name = rule.name();
++            let id = rule.id();
+             
+-            if !filter.enable_rules.is_empty() && !filter.enable_rules.iter().any(|r| r == name) {
++            if !filter.enable_rules.is_empty() && !filter.enable_rules.iter().any(|r| r == id) {
+                 continue;
+             }
+-            if filter.disable_rules.iter().any(|r| r == name) {
++            if filter.disable_rules.iter().any(|r| r == id) {
+                 continue;
+             }
+ 
+             let static_findings = rule.analyze_static(wasm_bytes)?;
+-            report.findings.extend(
+-                static_findings
+-                    .into_iter()
+-                    .filter(|f| f.severity >= filter.min_severity),
+-            );
++            let filtered_static: Vec<_> = static_findings
++                .into_iter()
++                .filter(|f| f.severity >= filter.min_severity)
++                .collect();
++            
++            if !filtered_static.is_empty() {
++                report.rules.insert(id.to_string(), rule.metadata());
++                report.findings.extend(filtered_static);
++            }
+ 
+             if let Some(tr) = trace {
+                 let dynamic_findings = rule.analyze_dynamic(executor, tr)?;
+-                report.findings.extend(
+-                    dynamic_findings
+-                        .into_iter()
+-                        .filter(|f| f.severity >= filter.min_severity),
+-                );
++                let filtered_dynamic: Vec<_> = dynamic_findings
++                    .into_iter()
++                    .filter(|f| f.severity >= filter.min_severity)
++                    .collect();
++                
++                if !filtered_dynamic.is_empty() {
++                    report.rules.insert(id.to_string(), rule.metadata());
++                    report.findings.extend(filtered_dynamic);
++                }
+             }
+         }
+ 
+@@ -212,13 +241,22 @@ fn is_valid_strkey(s: &str) -> bool {
+ 
+ struct HardcodedAddressRule;
+ impl SecurityRule for HardcodedAddressRule {
+-    fn name(&self) -> &str {
++    fn id(&self) -> &str {
+         "hardcoded-address"
+     }
++
++    fn name(&self) -> &str {
++        "Hardcoded Address detector"
++    }
++
+     fn description(&self) -> &str {
+         "Detects hardcoded Stellar addresses in WASM data sections."
+     }
+ 
++    fn severity(&self) -> Severity {
++        Severity::Medium
++    }
++
+     fn analyze_static(&self, wasm_bytes: &[u8]) -> Result<Vec<SecurityFinding>> {
+         let mut findings = Vec::new();
+ 
+@@ -238,7 +276,7 @@ impl SecurityRule for HardcodedAddressRule {
+                             && is_valid_strkey(word)
+                         {
+                             findings.push(SecurityFinding {
+-                                rule_id: self.name().to_string(),
++                                rule_id: self.id().to_string(),
+                                 severity: Severity::Medium,
+                                 location: "Data Section".to_string(),
+                                 description: format!("Found potential hardcoded address: {}", word),
+@@ -260,13 +298,22 @@ impl SecurityRule for HardcodedAddressRule {
+ 
+ struct ArithmeticCheckRule;
+ impl SecurityRule for ArithmeticCheckRule {
+-    fn name(&self) -> &str {
++    fn id(&self) -> &str {
+         "arithmetic-overflow"
+     }
++
++    fn name(&self) -> &str {
++        "Arithmetic Overflow detector"
++    }
++
+     fn description(&self) -> &str {
+         "Detects potential for unchecked arithmetic overflow."
+     }
+ 
++    fn severity(&self) -> Severity {
++        Severity::Medium
++    }
++
+     fn analyze_static(&self, wasm_bytes: &[u8]) -> Result<Vec<SecurityFinding>> {
+         let mut findings = Vec::new();
+         let instructions = parse_instructions(wasm_bytes);
+@@ -274,7 +321,7 @@ impl SecurityRule for ArithmeticCheckRule {
+         for (i, instr) in instructions.iter().enumerate() {
+             if Self::is_arithmetic(instr) && !Self::is_guarded(&instructions, i) {
+                 findings.push(SecurityFinding {
+-                    rule_id: self.name().to_string(),
++                    rule_id: self.id().to_string(),
+                     severity: Severity::Medium,
+                     location: format!("Instruction {}", i),
+                     description: format!("Unchecked arithmetic operation detected: {:?}", instr),
+@@ -305,13 +352,22 @@ impl ArithmeticCheckRule {
+ 
+ struct AuthorizationCheckRule;
+ impl SecurityRule for AuthorizationCheckRule {
+-    fn name(&self) -> &str {
++    fn id(&self) -> &str {
+         "missing-auth"
+     }
++
++    fn name(&self) -> &str {
++        "Missing Authorization detector"
++    }
++
+     fn description(&self) -> &str {
+         "Detects sensitive flows missing authorization checks."
+     }
+ 
++    fn severity(&self) -> Severity {
++        Severity::High
++    }
++
+     fn analyze_dynamic(
+         &self,
+         _executor: Option<&ContractExecutor>,
+@@ -349,7 +405,7 @@ impl SecurityRule for AuthorizationCheckRule {
+         // If we have storage writes without preceding auth, report a finding
+         if !problematic_storage_writes.is_empty() {
+             findings.push(SecurityFinding {
+-                rule_id: self.name().to_string(),
++                rule_id: self.id().to_string(),
+                 severity: Severity::High,
+                 location: "Dynamic trace".to_string(),
+                 description: format!(
+@@ -368,13 +424,22 @@ impl SecurityRule for AuthorizationCheckRule {
+ 
+ struct ReentrancyPatternRule;
+ impl SecurityRule for ReentrancyPatternRule {
+-    fn name(&self) -> &str {
++    fn id(&self) -> &str {
+         "reentrancy-pattern"
+     }
++
++    fn name(&self) -> &str {
++        "Reentrancy Pattern detector"
++    }
++
+     fn description(&self) -> &str {
+         "Detects cross-contract calls followed by storage writes in the same call frame."
+     }
+ 
++    fn severity(&self) -> Severity {
++        Severity::High
++    }
++
+     fn analyze_dynamic(
+         &self,
+         _executor: Option<&ContractExecutor>,
+@@ -400,14 +465,22 @@ struct PendingCrossCall {
+ 
+ struct CrossContractImportRule;
+ impl SecurityRule for CrossContractImportRule {
+-    fn name(&self) -> &str {
++    fn id(&self) -> &str {
+         "cross-contract-import"
+     }
+ 
++    fn name(&self) -> &str {
++        "Cross-Contract Import detector"
++    }
++
+     fn description(&self) -> &str {
+         "Detects cross-contract host function imports with robust name matching."
+     }
+ 
++    fn severity(&self) -> Severity {
++        Severity::Low
++    }
++
+     fn analyze_static(&self, wasm_bytes: &[u8]) -> Result<Vec<SecurityFinding>> {
+         let mut matches = Vec::new();
+ 
+@@ -439,7 +512,7 @@ impl SecurityRule for CrossContractImportRule {
+         }
+ 
+         Ok(vec![SecurityFinding {
+-            rule_id: self.name().to_string(),
++            rule_id: self.id().to_string(),
+             severity: Severity::Low,
+             location: "Import Section".to_string(),
+             description: format!(
+@@ -504,13 +577,22 @@ fn is_cross_contract_host_import(module: &str, name: &str) -> bool {
+ 
+ struct UnboundedIterationRule;
+ impl SecurityRule for UnboundedIterationRule {
+-    fn name(&self) -> &str {
++    fn id(&self) -> &str {
+         "unbounded-iteration"
+     }
++
++    fn name(&self) -> &str {
++        "Unbounded Iteration detector"
++    }
++
+     fn description(&self) -> &str {
+         "Detects storage-driven loops and unbounded read patterns."
+     }
+ 
++    fn severity(&self) -> Severity {
++        Severity::High
++    }
++
+     fn analyze_static(&self, wasm_bytes: &[u8]) -> Result<Vec<SecurityFinding>> {
+         let analysis = analyze_unbounded_iteration_static(wasm_bytes);
+         if !analysis.suspicious {
+@@ -725,9 +807,6 @@ fn analyze_unbounded_iteration_static(wasm_bytes: &[u8]) -> UnboundedStaticSigna
+ 
+     signal.suspicious = storage_calls_in_loops > 0;
+     signal
+-
+-    signal.suspicious = storage_calls_in_loops > 0;
+-    signal
+ }
+ 
+ fn is_storage_read_import(module: &str, name: &str) -> bool {

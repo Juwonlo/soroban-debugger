@@ -1,3 +1,5 @@
+use crate::analyzer::security::{AnalyzerFilter, RuleMetadata, SecurityAnalyzer, Severity};
+use crate::analyzer::symbolic::{SymbolicAnalyzer, SymbolicConfig};
 use crate::analyzer::upgrade::{CompatibilityReport, ExecutionDiff, UpgradeAnalyzer};
 use crate::analyzer::security::{AnalyzerFilter, SecurityAnalyzer, Severity};
 use crate::analyzer::symbolic::{SymbolicAnalyzer, SymbolicConfig};
@@ -20,6 +22,7 @@ use crate::ui::formatter::Formatter;
 use crate::ui::{run_dashboard, DebuggerUI};
 use crate::{DebuggerError, Result};
 use miette::WrapErr;
+use std::collections::HashMap;
 use std::fs;
 
 fn print_info(message: impl AsRef<str>) {
@@ -73,9 +76,11 @@ struct DynamicAnalysisMetadata {
 
 #[derive(serde::Serialize)]
 struct AnalyzeCommandOutput {
-    findings: Vec<crate::analyzer::security::SecurityFinding>,
-    dynamic_analysis: Option<DynamicAnalysisMetadata>,
-    warnings: Vec<String>,
+    pub schema_version: String,
+    pub findings: Vec<crate::analyzer::security::SecurityFinding>,
+    pub rules: HashMap<String, RuleMetadata>,
+    pub dynamic_analysis: Option<DynamicAnalysisMetadata>,
+    pub warnings: Vec<String>,
 }
 
 fn render_symbolic_report(report: &crate::analyzer::symbolic::SymbolicReport) -> String {
@@ -99,9 +104,8 @@ fn render_symbolic_report(report: &crate::analyzer::symbolic::SymbolicReport) ->
             "Replay token: {} (reproduce with --replay {})",
             seed, seed
         )),
-        None => lines.push(
-            "Replay token: none (add --seed <N> to lock the exploration order)".to_string(),
-        ),
+        None => lines
+            .push("Replay token: none (add --seed <N> to lock the exploration order)".to_string()),
     }
 
     if report.paths.is_empty() {
@@ -470,7 +474,10 @@ fn run_remote(args: &RunArgs, output_writer: &mut OutputWriter, remote_addr: &st
     }
 
     if let Some(snapshot_path) = &args.network_snapshot {
-        print_info(format!("Loading network snapshot on remote: {:?}", snapshot_path));
+        print_info(format!(
+            "Loading network snapshot on remote: {:?}",
+            snapshot_path
+        ));
         client.load_snapshot(&snapshot_path.to_string_lossy())?;
     }
 
@@ -502,14 +509,14 @@ fn run_remote(args: &RunArgs, output_writer: &mut OutputWriter, remote_addr: &st
 
     print_info("\n--- Remote Execution Start ---\n");
     let storage_before_str = client.get_storage()?;
-    let storage_before: std::collections::HashMap<String, String> = serde_json::from_str(&storage_before_str)
-        .unwrap_or_default();
+    let storage_before: std::collections::HashMap<String, String> =
+        serde_json::from_str(&storage_before_str).unwrap_or_default();
 
     let result = client.execute(&function, parsed_args.as_deref())?;
 
     let storage_after_str = client.get_storage()?;
-    let storage_after: std::collections::HashMap<String, String> = serde_json::from_str(&storage_after_str)
-        .unwrap_or_default();
+    let storage_after: std::collections::HashMap<String, String> =
+        serde_json::from_str(&storage_after_str).unwrap_or_default();
 
     let (cpu, mem) = client.get_budget()?;
 
@@ -519,7 +526,7 @@ fn run_remote(args: &RunArgs, output_writer: &mut OutputWriter, remote_addr: &st
     let storage_diff = crate::inspector::storage::StorageInspector::compute_diff(
         &storage_before,
         &storage_after,
-        &args.alert_on_change
+        &args.alert_on_change,
     );
     if !storage_diff.is_empty() || !args.alert_on_change.is_empty() {
         print_info("\n--- Storage Changes ---");
@@ -543,7 +550,10 @@ fn run_remote(args: &RunArgs, output_writer: &mut OutputWriter, remote_addr: &st
                     "status": "error",
                     "errors": [e.to_string()]
                 });
-                println!("{}", serde_json::to_string_pretty(&err_out).unwrap_or_default());
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&err_out).unwrap_or_default()
+                );
             }
         }
     }
@@ -943,6 +953,7 @@ pub fn run(args: RunArgs, verbosity: Verbosity) -> Result<()> {
 
     if args.is_json_output() {
         let mut output = serde_json::json!({
+            "schema_version": "1.0",
             "status": "success",
             "result": result,
             "sha256": wasm_hash,
@@ -1601,6 +1612,10 @@ pub fn profile(args: ProfileArgs) -> Result<()> {
     // Create executor
     let mut executor = ContractExecutor::new(wasm_bytes)?;
 
+    // Apply timeout — consistent with run, interactive, and analyze.
+    // A value of 0 disables the timeout.
+    executor.set_timeout(args.timeout);
+
     // Initial storage (optional)
     if let Some(storage_json) = &args.storage {
         let storage = parse_storage(storage_json)?;
@@ -1806,7 +1821,8 @@ pub fn replay(args: ReplayArgs, verbosity: Verbosity) -> Result<()> {
 
     // Compare results
     print_info("\n--- Comparison ---");
-    let report = crate::compare::CompareEngine::compare(&truncated_original, &replayed_trace, args.context);
+    let report =
+        crate::compare::CompareEngine::compare(&truncated_original, &replayed_trace, args.context);
     let rendered = crate::compare::CompareEngine::render_report(&report);
 
     if let Some(output_path) = &args.output {
@@ -1849,11 +1865,13 @@ pub fn server(args: ServerArgs) -> Result<()> {
     ));
     if let Some(token) = &args.token {
         print_info("Token authentication enabled");
-        if token.trim().len() < 16 {
-            print_warning(
-                "Remote debug token is shorter than 16 characters. Prefer at least 16 characters \
-                 and ideally a random 32-byte token.",
-            );
+        if let Some(t) = &args.token {
+            if t.trim().len() < 16 {
+                print_warning(
+                    "Remote debug token is shorter than 16 characters. Prefer at least 16 characters \
+                     and ideally a random 32-byte token.",
+                );
+            }
         }
     } else {
         print_info("Token authentication disabled");
@@ -1991,6 +2009,15 @@ pub fn interactive(args: InteractiveArgs, _verbosity: Verbosity) -> Result<()> {
     }
 
     print_info("Starting interactive session (type 'help' for commands)");
+    // Show paused file/line if available
+    if engine.is_paused() {
+        if let Some(loc) = engine.current_source_location() {
+            let file = loc.file.display();
+            let line = loc.line;
+            let col = loc.column.map(|c| format!(":{}", c)).unwrap_or_default();
+            print_info(format!("Paused at: {}:{}{}", file, line, col));
+        }
+    }
     let mut ui = DebuggerUI::new(engine)?;
     ui.queue_execution(args.function.clone(), parsed_args);
     ui.run()
@@ -2167,7 +2194,9 @@ pub fn analyze(args: AnalyzeArgs, _verbosity: Verbosity) -> Result<()> {
         &filter,
     )?;
     let output = AnalyzeCommandOutput {
+        schema_version: "1.0".to_string(),
         findings: report.findings,
+        rules: report.rules,
         dynamic_analysis,
         warnings,
     };

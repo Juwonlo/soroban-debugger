@@ -13,6 +13,12 @@ pub struct SourceLocation {
     pub column: Option<u32>,
 }
 
+/// A diagnostic message indicating an issue with loading DWARF debug metadata.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct SourceMapDiagnostic {
+    pub message: String,
+}
+
 /// Manages mapping from WASM offsets to source code locations
 pub struct SourceMap {
     /// Mapping from offset to source location (sorted by offset)
@@ -21,6 +27,8 @@ pub struct SourceMap {
     source_cache: HashMap<PathBuf, String>,
     /// Code section payload range (when known), used to normalize DWARF addresses.
     code_section_range: Option<std::ops::Range<usize>>,
+    /// Diagnostics accumulated during DWARF parsing
+    pub diagnostics: Vec<SourceMapDiagnostic>,
 }
 
 /// Result of resolving a source breakpoint (file + line) to a concrete contract entrypoint breakpoint.
@@ -57,6 +65,7 @@ impl SourceMap {
             offsets: BTreeMap::new(),
             source_cache: HashMap::new(),
             code_section_range: None,
+            diagnostics: Vec::new(),
         }
     }
 
@@ -87,22 +96,54 @@ impl SourceMap {
             Ok(EndianSlice::new(data, RunTimeEndian::Little))
         };
 
-        let dwarf = Dwarf::load(&load_section).map_err(|e| {
-            DebuggerError::WasmLoadError(format!("Failed to load DWARF sections: {}", e))
-        })?;
+        let dwarf = match Dwarf::load(&load_section) {
+            Ok(d) => d,
+            Err(e) => {
+                self.diagnostics.push(SourceMapDiagnostic {
+                    message: format!("Failed to load DWARF sections: {}", e),
+                });
+                // We cannot proceed without the main DWARF sections headers successfully parsed
+                return Err(DebuggerError::WasmLoadError(format!("DWARF sections severely malformed: {}", e)).into());
+            }
+        };
 
         let mut units = dwarf.units();
-        while let Some(header) = units.next().map_err(|e| {
-            DebuggerError::WasmLoadError(format!("Failed to read DWARF unit: {}", e))
-        })? {
-            let unit = dwarf.unit(header).map_err(|e| {
-                DebuggerError::WasmLoadError(format!("Failed to load DWARF unit: {}", e))
-            })?;
+        loop {
+            let header = match units.next() {
+                Ok(Some(h)) => h,
+                Ok(None) => break,
+                Err(e) => {
+                    self.diagnostics.push(SourceMapDiagnostic {
+                        message: format!("Failed to read DWARF unit header: {}", e),
+                    });
+                    break;
+                }
+            };
+            
+            let unit = match dwarf.unit(header) {
+                Ok(u) => u,
+                Err(e) => {
+                    self.diagnostics.push(SourceMapDiagnostic {
+                        message: format!("Failed to load DWARF unit content: {}", e),
+                    });
+                    continue; // try next unit
+                }
+            };
+            
             if let Some(program) = unit.line_program.clone() {
                 let mut rows = program.rows();
-                while let Some((header, row)) = rows.next_row().map_err(|e| {
-                    DebuggerError::WasmLoadError(format!("Failed to read DWARF line row: {}", e))
-                })? {
+                loop {
+                    let (header, row) = match rows.next_row() {
+                        Ok(Some(t)) => t,
+                        Ok(None) => break,
+                        Err(e) => {
+                            self.diagnostics.push(SourceMapDiagnostic {
+                                message: format!("Failed to read DWARF line row: {}", e),
+                            });
+                            break; // break row iteration for this unit, continue to next unit
+                        }
+                    };
+                    
                     if let Some(file_path) =
                         self.get_file_path(&dwarf, &unit, header, row.file_index())
                     {
@@ -125,6 +166,10 @@ impl SourceMap {
                         );
                     }
                 }
+            } else {
+                self.diagnostics.push(SourceMapDiagnostic {
+                    message: format!("DWARF unit is missing a line program (e.g., .debug_line section data missing or malformed)."),
+                });
             }
         }
 
@@ -602,4 +647,3 @@ fn paths_match_normalized(a: &str, b: &str) -> bool {
     let b_file = b.rsplit('/').next().unwrap_or(b);
     a_file == b_file
 }
-

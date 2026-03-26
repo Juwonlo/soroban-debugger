@@ -21,8 +21,10 @@ fn main() {
             );
 
             for finding in &report.findings {
-                if finding.rule_id == "unbounded-iteration" {
-                    println!("🔍 Unbounded Iteration Finding:");
+                if finding.rule_id == "unbounded-iteration"
+                    || finding.rule_id == "storage-write-pressure"
+                {
+                    println!("🔍 {} Finding:", finding.rule_id);
                     println!("  Severity: {:?}", finding.severity);
                     println!("  Description: {}", finding.description);
 
@@ -125,5 +127,6 @@ mod tests {
         assert!(finding.confidence.is_some());
         assert!(finding.rationale.is_some());
         assert!(!finding.rationale.as_ref().unwrap().is_empty());
+        assert!(finding.confidence.unwrap_or_default() >= 0.5);
     }
 }

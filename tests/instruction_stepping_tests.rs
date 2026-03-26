@@ -1,3 +1,21 @@
+#[test]
+fn test_debugger_engine_current_source_location() {
+    use soroban_debugger::debugger::engine::DebuggerEngine;
+    use soroban_debugger::runtime::executor::ContractExecutor;
+    use soroban_debugger::debugger::source_map::SourceLocation;
+
+    // Minimal WASM with no debug info, so no source location
+    let wasm_bytes = create_test_wasm();
+    let executor = ContractExecutor::new(wasm_bytes.clone()).unwrap();
+    let mut engine = DebuggerEngine::new(executor, vec![]);
+    // Enable instruction debug (loads source map)
+    let _ = engine.enable_instruction_debug(&wasm_bytes);
+    // Should be None (no debug info)
+    assert!(engine.current_source_location().is_none());
+
+    // If you want to test with debug info, you would need a WASM with DWARF sections.
+    // For now, this checks the method does not panic and returns None gracefully.
+}
 //! Tests for instruction-level stepping functionality
 
 use soroban_debugger::runtime::{Instruction, InstructionParser};
