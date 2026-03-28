@@ -7,7 +7,10 @@ use crate::Result;
 #[derive(Debug, Clone)]
 pub enum ReplCommand {
     /// Call a contract function: call <function> [args...]
-    Call { function: String, args: Vec<String> },
+    Call {
+        function: String,
+        args: Vec<String>,
+    },
     /// Inspect storage: storage
     Storage,
     /// Show command history: history
@@ -26,7 +29,9 @@ pub enum ReplCommand {
     /// List breakpoints: list-breaks
     ListBreaks,
     /// Clear a breakpoint: clear-break <function>
-    ClearBreak { function: String },
+    ClearBreak {
+        function: String,
+    },
     Functions,
 }
 

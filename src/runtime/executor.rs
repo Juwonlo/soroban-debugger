@@ -1,4 +1,4 @@
-﻿//! Soroban contract executor â€” public faÃ§ade for the runtime sub-modules.
+//! Soroban contract executor â€” public faÃ§ade for the runtime sub-modules.
 //!
 //! [`ContractExecutor`] is the main entry-point for all contract execution.
 //! Internally it delegates to four focused sub-modules:
@@ -21,7 +21,10 @@ use soroban_sdk::testutils::Ledger as _;
 use soroban_sdk::{Address, Env};
 use std::collections::HashMap;
 use std::panic::{catch_unwind, AssertUnwindSafe};
-use std::sync::{Arc, Mutex};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc, Mutex,
+};
 use tracing::info;
 
 // â”€â”€ re-exports so callers never need to import sub-modules directly â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -613,31 +616,74 @@ impl ContractExecutor {
     }
 }
 
+/// Token for cooperative execution cancellation (issue #504).
+#[derive(Debug, Clone)]
+pub struct CancellationToken {
+    inner: Arc<AtomicBool>,
+}
+
+impl CancellationToken {
+    pub fn new() -> Self {
+        Self {
+            inner: Arc::new(AtomicBool::new(false)),
+        }
+    }
+
+    pub fn cancel(&self) {
+        self.inner.store(true, Ordering::SeqCst);
+    }
+
+    pub fn is_cancelled(&self) -> bool {
+        self.inner.load(Ordering::SeqCst)
+    }
+}
+
+impl Default for CancellationToken {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 struct ExecutionTimeoutWatchdog {
     done_tx: Option<std::sync::mpsc::Sender<()>>,
+    cancellation_token: CancellationToken,
 }
 
 impl ExecutionTimeoutWatchdog {
     fn start(timeout_secs: u64) -> Self {
         if timeout_secs == 0 {
-            return Self { done_tx: None };
+            return Self {
+                done_tx: None,
+                cancellation_token: CancellationToken::new(),
+            };
         }
 
         let (tx, rx) = std::sync::mpsc::channel::<()>();
+        let cancel_token = CancellationToken::new();
+        let token_clone = cancel_token.clone();
+
         std::thread::spawn(move || {
             match rx.recv_timeout(std::time::Duration::from_secs(timeout_secs)) {
                 Ok(()) | Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {}
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-                    eprintln!(
-                    "Execution timed out after {} seconds. Aborting with exit code 124. Use --timeout to adjust.",
-                    timeout_secs
-                );
-                    std::process::exit(124);
+                    tracing::warn!(
+                        "Execution timeout after {} seconds. Initiating cooperative cancellation.",
+                        timeout_secs
+                    );
+                    token_clone.cancel();
                 }
             }
         });
 
-        Self { done_tx: Some(tx) }
+        Self {
+            done_tx: Some(tx),
+            cancellation_token: cancel_token,
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn token(&self) -> CancellationToken {
+        self.cancellation_token.clone()
     }
 }
 

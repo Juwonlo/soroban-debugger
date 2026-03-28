@@ -41,6 +41,15 @@ pub enum OutputFormat {
     Json,
 }
 
+/// Export format for profiler output (issue #502).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum, Default)]
+pub enum ProfileExportFormat {
+    #[default]
+    Report,
+    FoldedStack,
+    Json,
+}
+
 /// Format for dependency graph output.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum GraphFormat {
@@ -926,6 +935,11 @@ pub struct ProfileArgs {
     /// Initial storage state as JSON object
     #[arg(short, long)]
     pub storage: Option<String>,
+
+    /// Export format for profiler output (report|folded-stack|json)
+    #[arg(long, value_enum, default_value_t = ProfileExportFormat::Report)]
+    pub export_format: ProfileExportFormat,
+
     /// Expected SHA-256 hash of the WASM file. If provided, loading will fail if the computed hash does not match.
     #[arg(long)]
     pub expected_hash: Option<String>,

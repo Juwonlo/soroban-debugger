@@ -1602,17 +1602,36 @@ pub fn profile(args: ProfileArgs) -> Result<()> {
     let contract_path_str = args.contract.to_string_lossy().to_string();
     let report = optimizer.generate_report(&contract_path_str);
 
-    // Hotspot summary first
-    logging::log_display(
-        format!("\n{}", report.format_hotspots()),
-        logging::LogLevel::Info,
-    );
-
-    // Then detailed suggestions (markdown format)
-    let markdown = optimizer.generate_markdown_report(&report);
+    // Format output based on export_format
+    let output_content = match args.export_format {
+        crate::cli::args::ProfileExportFormat::FoldedStack => {
+            // Export in folded stack format for external tools (issue #502)
+            optimizer.to_folded_stack_format(&report)
+        }
+        crate::cli::args::ProfileExportFormat::Json => {
+            // Export as JSON with basic metrics
+            let func_names: Vec<String> = report.functions.iter().map(|f| f.name.clone()).collect();
+            serde_json::to_string_pretty(&serde_json::json!({
+                "contract": contract_path_str,
+                "functions": func_names,
+                "total_cpu": report.total_cpu,
+                "total_memory": report.total_memory,
+                "potential_cpu_savings": report.potential_cpu_savings,
+                "potential_memory_savings": report.potential_memory_savings,
+            }))
+            .unwrap_or_else(|_| "{}".to_string())
+        }
+        crate::cli::args::ProfileExportFormat::Report => {
+            // Default markdown report
+            let hotspots = report.format_hotspots();
+            let markdown = optimizer.generate_markdown_report(&report);
+            logging::log_display(format!("\n{}", hotspots), logging::LogLevel::Info);
+            markdown
+        }
+    };
 
     if let Some(output_path) = &args.output {
-        fs::write(output_path, &markdown).map_err(|e| {
+        fs::write(output_path, &output_content).map_err(|e| {
             DebuggerError::FileError(format!(
                 "Failed to write report to {:?}: {}",
                 output_path, e
@@ -1622,8 +1641,12 @@ pub fn profile(args: ProfileArgs) -> Result<()> {
             format!("\nProfile report written to: {:?}", output_path),
             logging::LogLevel::Info,
         );
-    } else {
-        logging::log_display(format!("\n{}", markdown), logging::LogLevel::Info);
+    } else if !matches!(
+        args.export_format,
+        crate::cli::args::ProfileExportFormat::Report
+    ) {
+        // Only print output_content for non-Report formats if no file specified
+        logging::log_display(format!("\n{}", output_content), logging::LogLevel::Info);
     }
 
     Ok(())
