@@ -118,6 +118,7 @@ jobs:
       BENCH_SAMPLE_SIZE: 20
       BENCH_MEASUREMENT_TIME: 5
       BENCH_WARMUP_TIME: 2
+      BENCH_BASE_WORKTREE: /tmp/bench-base-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -149,17 +150,37 @@ jobs:
         run: cargo bench --benches -- --noplot --sample-size $BENCH_SAMPLE_SIZE --measurement-time $BENCH_MEASUREMENT_TIME --warm-up-time $BENCH_WARMUP_TIME
 
       - name: Add main branch worktree for baseline
-        run: git worktree add /tmp/bench-base main
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Preparing baseline worktree at: $BENCH_BASE_WORKTREE"
+          git worktree list --porcelain || true
+          git worktree add "$BENCH_BASE_WORKTREE" main
+          git worktree list --porcelain || true
 
       - name: Run benchmarks (baseline on main)
-        working-directory: /tmp/bench-base
+        working-directory: ${{ env.BENCH_BASE_WORKTREE }}
         env:
           CARGO_TARGET_DIR: ${{ github.workspace }}/target
         run: cargo bench -- --save-baseline base --noplot
 
       - name: Remove main branch worktree
         if: always()
-        run: git worktree remove --force /tmp/bench-base || true
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Cleaning baseline worktree at: $BENCH_BASE_WORKTREE"
+          git worktree list --porcelain || true
+
+          if git worktree remove --force "$BENCH_BASE_WORKTREE"; then
+            echo "Removed baseline worktree cleanly"
+          else
+            echo "worktree remove failed; running prune/remove fallback"
+            git worktree prune --expire now || true
+            rm -rf "$BENCH_BASE_WORKTREE" || true
+          fi
+
+          git worktree list --porcelain || true
       - name: Record current results (JSON)
         run: cargo run --quiet --bin bench-regression -- record --criterion target/criterion --out .bench/current.json
 

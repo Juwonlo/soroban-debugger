@@ -1,16 +1,4 @@
 #!/usr/bin/env bash
-# Runs the benchmark regression gate without mutating the caller's checkout.
-# It benchmarks the current tree, benchmarks a baseline ref in a temporary
-# detached worktree, and compares the saved Criterion baselines with critcmp.
-#
-# Usage:
-#   bash scripts/check_benchmark_regressions.sh
-#
-# Optional environment variables:
-#   BASELINE_REF            Git ref to benchmark as the baseline.
-#   BENCHMARK_THRESHOLD     critcmp percentage threshold (default: 10).
-#   CURRENT_BASELINE_NAME   Criterion baseline name for the current tree.
-#   BASELINE_NAME           Criterion baseline name for the baseline ref.
 
 set -euo pipefail
 
@@ -18,6 +6,15 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BENCHMARK_THRESHOLD="${BENCHMARK_THRESHOLD:-10}"
 CURRENT_BASELINE_NAME="${CURRENT_BASELINE_NAME:-new}"
 BASELINE_NAME="${BASELINE_NAME:-base}"
+
+log() {
+    printf '[bench-regression] %s\n' "$*"
+}
+
+log_worktree_state() {
+    log "worktree state"
+    git -C "$REPO_ROOT" worktree list --porcelain || log "unable to read worktree list"
+}
 
 if [ -z "${BASELINE_REF:-}" ]; then
     if git -C "$REPO_ROOT" rev-parse --verify --quiet refs/remotes/origin/main >/dev/null; then
@@ -34,10 +31,35 @@ CRITCMP_ROOT="$TEMP_DIR/critcmp-root"
 WORKTREE_ADDED=0
 
 cleanup() {
+    local cleanup_failed=0
+
+    log "cleanup start"
+    log "temp dir: $TEMP_DIR"
+    log "worktree path: $WORKTREE_DIR"
+    log_worktree_state
+
     if [ "$WORKTREE_ADDED" -eq 1 ]; then
-        git -C "$REPO_ROOT" worktree remove --force "$WORKTREE_DIR" >/dev/null 2>&1 || true
+        if git -C "$REPO_ROOT" worktree remove --force "$WORKTREE_DIR"; then
+            log "worktree remove succeeded"
+        else
+            log "worktree remove failed; running fallback prune/remove"
+            git -C "$REPO_ROOT" worktree prune --expire now || cleanup_failed=1
+            if [ -d "$WORKTREE_DIR" ]; then
+                rm -rf "$WORKTREE_DIR" || cleanup_failed=1
+            fi
+        fi
+    else
+        log "worktree add was not completed"
     fi
-    rm -rf "$TEMP_DIR"
+
+    rm -rf "$TEMP_DIR" || cleanup_failed=1
+    log_worktree_state
+
+    if [ "$cleanup_failed" -eq 0 ]; then
+        log "cleanup complete"
+    else
+        log "cleanup complete with fallback errors"
+    fi
 }
 
 trap cleanup EXIT
@@ -48,17 +70,19 @@ if ! command -v critcmp >/dev/null 2>&1; then
     exit 2
 fi
 
-echo "Preparing baseline worktree for $BASELINE_REF..."
+log "baseline ref: $BASELINE_REF"
+log "adding detached worktree"
 git -C "$REPO_ROOT" worktree add --detach "$WORKTREE_DIR" "$BASELINE_REF"
 WORKTREE_ADDED=1
+log_worktree_state
 
-echo "Running benchmarks for the current checkout..."
+log "running benchmarks for current checkout"
 (
     cd "$REPO_ROOT"
     CARGO_TARGET_DIR="$BENCH_TARGET_DIR" cargo bench -- --save-baseline "$CURRENT_BASELINE_NAME" --noplot
 )
 
-echo "Running benchmarks for the baseline checkout..."
+log "running benchmarks for baseline checkout"
 (
     cd "$WORKTREE_DIR"
     CARGO_TARGET_DIR="$BENCH_TARGET_DIR" cargo bench -- --save-baseline "$BASELINE_NAME" --noplot
@@ -73,7 +97,7 @@ fi
 
 cp -R "$BENCH_TARGET_DIR/criterion" "$CRITCMP_ROOT/target/criterion"
 
-echo "Comparing baselines with critcmp (threshold: ${BENCHMARK_THRESHOLD}%)..."
+log "comparing baselines with critcmp (threshold: ${BENCHMARK_THRESHOLD}%)"
 (
     cd "$CRITCMP_ROOT"
 
