@@ -151,5 +151,9 @@ This matrix is derived from:
 - **CLI surface:** `src/cli/args.rs` — `RunArgs`, `InteractiveArgs`, `ServerArgs`, `RemoteArgs` structs
 - **DAP surface:** `extensions/vscode/src/dap/adapter.ts` — `initializeRequest` capability flags and `launchRequest` argument handling
 
+Related CI contract checks:
+- Coverage enforcement in `.github/workflows/ci.yml` validates `cargo llvm-cov --json --summary-only` schema and requires `.data[0].totals.lines.percent` to exist as a numeric field.
+- Missing-field behavior is regression-tested by `bash scripts/check_benchmark_regressions.sh selftest-coverage-missing-field` to keep schema drift failures actionable.
+
 When adding a new CLI flag or DAP capability, update this file alongside the
 implementation to keep gaps explicit rather than implicit.
