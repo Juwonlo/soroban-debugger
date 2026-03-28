@@ -115,7 +115,11 @@ check:
 4. Enable CLI verbose logging or VS Code trace logging.
 5. Only after that, broaden global timeouts or retry windows.
 
-## Restricted Environments and `ci-sandbox`
+## Local and CI Sandbox Failures
+
+These failures typically occur due to permission restrictions or environment configuration in CI runners, Nix shells, or local sandboxes.
+
+### Restricted Environments and `ci-sandbox`
 
 If you are running local checks in CI containers, hardened desktops, or other restricted environments, use the sandbox-safe local gate:
 
@@ -130,3 +134,18 @@ What this does:
 - Explicitly reports skipped gates that depend on local loopback networking or writable temp-dir behavior.
 
 Use `ci-local` when your environment has full local networking and temp-dir support; use `ci-sandbox` when it does not.
+
+### Troubleshooting Matrix
+
+| Symptom | Likely cause | What to try |
+| --- | --- | --- |
+| `listen EPERM` | Local network binding is restricted | Run in a non-sandboxed environment or skip network tests using `cargo test -- --skip remote_run_tests`. |
+| `mktemp` failure | Restricted `/tmp` or missing write permissions | Override the temp directory by setting `export TMPDIR=$(pwd)/.tmp` (ensure the target exists). |
+| `Permission denied` on `/var/...` | Fixed paths in scripts not honoring `TMPDIR` | Verify the script honors the `TMPDIR` environment variable and provide a writable alternative. |
+| Socket bind timeout | Fixed port collision or loopback restriction | Prefer tests using ephemeral ports (port 0) or check if another process is using a fixed port like 9245. |
+
+### CI Environment Checklist
+
+- **`TMPDIR`**: Ensure this points to a writable directory within your runner's workspace.
+- **Network Policy**: Verify that `127.0.0.1` is available and binding to ports is permitted.
+- **Profiles**: Use `make ci-local` locally to match GitHub Action ordering and automated gates.

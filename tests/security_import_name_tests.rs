@@ -1,4 +1,5 @@
 use soroban_debugger::analyzer::security::{AnalyzerFilter, SecurityAnalyzer};
+use soroban_debugger::server::protocol::{DynamicTraceEvent, DynamicTraceEventKind};
 
 fn uleb128(mut value: usize) -> Vec<u8> {
     let mut out = Vec::new();

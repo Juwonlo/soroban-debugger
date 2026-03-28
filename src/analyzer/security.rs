@@ -1513,7 +1513,7 @@ fn find_writes_seen_by_frame(
         return *count;
     }
 
-    if let Some(_) = frame.call_depth {
+    if frame.call_depth.is_some() {
         writes_seen_by_frame
             .iter()
             .filter(|(key, _)| key.matches(frame))

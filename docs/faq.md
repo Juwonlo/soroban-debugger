@@ -10,6 +10,7 @@ This page covers common questions, confusing behaviors, and troubleshooting tips
 - [Output and Trace](#output-and-trace)
 - [Argument Parsing](#argument-parsing)
 - [CLI vs VS Code Extension](#cli-vs-vs-code-extension---feature-differences)
+- [Local and CI Environment](#local-and-ci-environment)
 
 ---
 
@@ -298,3 +299,11 @@ If you specify `--json` or set `SOROBAN_DEBUG_JSON=1`, these hints are also secu
   ]
 }
 ```
+
+---
+
+## Local and CI Environment
+
+### 27. I'm getting `listen EPERM` or `mktemp` failures in my CI environment
+**Answer:** These are often caused by environment restrictions in sandboxed CI runners or missing permissions for temp directories.
+**Fix:** See the [Local and CI Sandbox Failures](remote-troubleshooting.md#local-and-ci-sandbox-failures) section in the troubleshooting guide for a matrix of common failures and their fixes.
