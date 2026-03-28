@@ -5,6 +5,8 @@
 #
 # Usage:
 #   bash scripts/check_benchmark_regressions.sh
+#   bash scripts/check_benchmark_regressions.sh coverage-percent-from-json < summary.json
+#   bash scripts/check_benchmark_regressions.sh selftest-coverage-missing-field
 #
 # Optional environment variables:
 #   BASELINE_REF            Git ref to benchmark as the baseline.
@@ -13,6 +15,118 @@
 #   BASELINE_NAME           Criterion baseline name for the baseline ref.
 
 set -euo pipefail
+
+require_jq() {
+    if ! command -v jq >/dev/null 2>&1; then
+        echo "ERROR: jq is required to parse coverage JSON but was not found on PATH." >&2
+        echo "Install jq or use an environment image that provides jq." >&2
+        return 2
+    fi
+}
+
+emit_schema_debug() {
+    local input_json="$1"
+    local top_keys
+    local first_keys
+    local totals_keys
+    local lines_keys
+
+    top_keys="$(printf '%s' "$input_json" | jq -r 'keys_unsorted | join(",")' 2>/dev/null || true)"
+    first_keys="$(printf '%s' "$input_json" | jq -r '.data[0] | keys_unsorted | join(",")' 2>/dev/null || true)"
+    totals_keys="$(printf '%s' "$input_json" | jq -r '.data[0].totals | keys_unsorted | join(",")' 2>/dev/null || true)"
+    lines_keys="$(printf '%s' "$input_json" | jq -r '.data[0].totals.lines | keys_unsorted | join(",")' 2>/dev/null || true)"
+
+    [ -n "$top_keys" ] && echo "DEBUG: top-level keys: $top_keys" >&2
+    [ -n "$first_keys" ] && echo "DEBUG: .data[0] keys: $first_keys" >&2
+    [ -n "$totals_keys" ] && echo "DEBUG: .data[0].totals keys: $totals_keys" >&2
+    [ -n "$lines_keys" ] && echo "DEBUG: .data[0].totals.lines keys: $lines_keys" >&2
+}
+
+coverage_percent_from_json() {
+    require_jq || return $?
+
+    local input_json
+    input_json="$(cat)"
+
+    if [ -z "$input_json" ]; then
+        echo "ERROR: No JSON input provided to coverage-percent-from-json." >&2
+        echo "Pipe cargo-llvm-cov JSON output into this command." >&2
+        return 1
+    fi
+
+    if ! printf '%s' "$input_json" | jq -e '.' >/dev/null 2>&1; then
+        echo "ERROR: Input is not valid JSON." >&2
+        return 1
+    fi
+
+    if ! printf '%s' "$input_json" | jq -e '.data | type == "array" and length > 0' >/dev/null 2>&1; then
+        echo "ERROR: Coverage JSON schema changed; expected non-empty '.data' array." >&2
+        emit_schema_debug "$input_json"
+        return 1
+    fi
+
+    if ! printf '%s' "$input_json" | jq -e '.data[0].totals | type == "object"' >/dev/null 2>&1; then
+        echo "ERROR: Coverage JSON schema changed; missing required object '.data[0].totals'." >&2
+        emit_schema_debug "$input_json"
+        return 1
+    fi
+
+    if ! printf '%s' "$input_json" | jq -e '.data[0].totals.lines | type == "object"' >/dev/null 2>&1; then
+        echo "ERROR: Coverage JSON schema changed; missing required object '.data[0].totals.lines'." >&2
+        emit_schema_debug "$input_json"
+        return 1
+    fi
+
+    if ! printf '%s' "$input_json" | jq -e '.data[0].totals.lines.percent | type == "number"' >/dev/null 2>&1; then
+        echo "ERROR: Coverage JSON schema changed; missing required numeric field '.data[0].totals.lines.percent'." >&2
+        emit_schema_debug "$input_json"
+        return 1
+    fi
+
+    printf '%s' "$input_json" | jq -r '.data[0].totals.lines.percent'
+}
+
+selftest_coverage_missing_field() {
+    local broken_json
+    local output
+    local status
+
+    if ! require_jq; then
+        echo "ERROR: Cannot run coverage parser self-test without jq." >&2
+        return 2
+    fi
+
+    broken_json='{"data":[{"totals":{"lines":{}}}]}'
+
+    set +e
+    output="$(printf '%s' "$broken_json" | coverage_percent_from_json 2>&1)"
+    status=$?
+    set -e
+
+    if [ "$status" -eq 0 ]; then
+        echo "ERROR: Expected coverage parser to fail when '.data[0].totals.lines.percent' is missing." >&2
+        return 1
+    fi
+
+    echo "$output"
+    if ! printf '%s' "$output" | grep -Fq "missing required numeric field '.data[0].totals.lines.percent'"; then
+        echo "ERROR: Coverage parser failure was not actionable enough." >&2
+        return 1
+    fi
+
+    echo "Coverage parser self-test passed: missing field emitted actionable error."
+}
+
+case "${1:-}" in
+    coverage-percent-from-json)
+        coverage_percent_from_json
+        exit 0
+        ;;
+    selftest-coverage-missing-field)
+        selftest_coverage_missing_field
+        exit 0
+        ;;
+esac
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BENCHMARK_THRESHOLD="${BENCHMARK_THRESHOLD:-10}"

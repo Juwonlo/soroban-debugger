@@ -237,14 +237,8 @@ jobs:
           summary_json=$(cargo llvm-cov --workspace --all-features --json --summary-only 2>&1)
           echo "$summary_json"
 
-          # Extract line coverage; || true lets us emit a clear error instead of a raw jq failure
-          coverage=$(printf '%s' "$summary_json" | jq -r '.data[0].totals.lines.percent' 2>/dev/null || true)
-
-          if [ -z "$coverage" ] || [ "$coverage" = "null" ]; then
-            echo "ERROR: Failed to extract coverage from cargo-llvm-cov JSON output."
-            echo "Verify that 'cargo llvm-cov --json --summary-only' still emits .data[0].totals.lines.percent"
-            exit 1
-          fi
+          # Parse and validate required schema fields through the shared script helper.
+          coverage="$(printf '%s' "$summary_json" | bash scripts/check_benchmark_regressions.sh coverage-percent-from-json)"
 
           coverage_pct=$(printf "%.2f" "$coverage")
           echo "Current coverage: ${coverage_pct}%"
@@ -258,6 +252,10 @@ jobs:
           else
             echo "Coverage ${coverage_pct}% meets the required 50% threshold"
           fi
+
+      - name: Validate coverage parser on missing required field
+        shell: bash
+        run: bash scripts/check_benchmark_regressions.sh selftest-coverage-missing-field
       
       - name: Upload to Codecov
         uses: codecov/codecov-action@v4
