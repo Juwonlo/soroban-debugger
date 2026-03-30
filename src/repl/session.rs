@@ -155,6 +155,10 @@ impl ReplSession {
         self.print_welcome();
 
         loop {
+            if let Some(helper) = self.editor.helper_mut() {
+                helper.functions = self.executor.function_names();
+            }
+
             let prompt = format!(
                 "{}> ",
                 Formatter::info(

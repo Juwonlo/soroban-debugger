@@ -460,8 +460,8 @@ pub fn check_api_version(plugin_version: u32) -> Result<(), crate::plugin::api::
     use crate::plugin::api::{PluginError, PLUGIN_API_VERSION};
     if plugin_version != PLUGIN_API_VERSION {
         return Err(PluginError::VersionMismatch {
-            expected: PLUGIN_API_VERSION,
-            found: plugin_version,
+            required: PLUGIN_API_VERSION.to_string(),
+            found: plugin_version.to_string(),
         });
     }
     Ok(())

@@ -70,50 +70,30 @@ impl ErrorDatabase {
         Ok(())
     }
 
-    pub fn display_error(&self, code: u32) {
+    pub fn format_error(&self, code: u32) -> String {
+        let mut output = String::new();
         if let Some(explanation) = self.lookup(code) {
-            crate::logging::log_display(
-                "\n=== Error Explanation ===",
-                crate::logging::LogLevel::Info,
-            );
-            crate::logging::log_display(
-                format!("Error Code: {}", explanation.code),
-                crate::logging::LogLevel::Info,
-            );
-            crate::logging::log_display(
-                format!("Error Name: {}", explanation.name),
-                crate::logging::LogLevel::Info,
-            );
-            crate::logging::log_display("\nDescription:", crate::logging::LogLevel::Info);
-            crate::logging::log_display(
-                format!("  {}", explanation.description),
-                crate::logging::LogLevel::Info,
-            );
-            crate::logging::log_display("\nCommon Cause:", crate::logging::LogLevel::Info);
-            crate::logging::log_display(
-                format!("  {}", explanation.common_cause),
-                crate::logging::LogLevel::Info,
-            );
-            crate::logging::log_display("\nSuggested Fix:", crate::logging::LogLevel::Info);
-            crate::logging::log_display(
-                format!("  {}", explanation.suggested_fix),
-                crate::logging::LogLevel::Info,
-            );
-            crate::logging::log_display("", crate::logging::LogLevel::Info);
+            output.push_str("\n=== Error Explanation ===\n");
+            output.push_str(&format!("Error Code: {}\n", explanation.code));
+            output.push_str(&format!("Error Name: {}\n", explanation.name));
+            output.push_str("\nDescription:\n");
+            output.push_str(&format!("  {}\n", explanation.description));
+            output.push_str("\nCommon Cause:\n");
+            output.push_str(&format!("  {}\n", explanation.common_cause));
+            output.push_str("\nSuggested Fix:\n");
+            output.push_str(&format!("  {}\n", explanation.suggested_fix));
         } else {
-            crate::logging::log_display(
-                format!("\n=== Error Code: {} ===", code),
-                crate::logging::LogLevel::Info,
-            );
-            crate::logging::log_display(
-                "No explanation available for this error code.",
-                crate::logging::LogLevel::Info,
-            );
-            crate::logging::log_display(
-                "This may be a custom contract error. Check contract documentation.",
-                crate::logging::LogLevel::Info,
-            );
-            crate::logging::log_display("", crate::logging::LogLevel::Info);
+            output.push_str(&format!("\n=== Error Code: {} ===\n", code));
+            output.push_str("No explanation available for this error code.\n");
+            output.push_str("This may be a custom contract error. Check contract documentation.\n");
+        }
+        output
+    }
+
+    pub fn display_error(&self, code: u32) {
+        let formatted = self.format_error(code);
+        for line in formatted.lines() {
+            crate::logging::log_display(line, crate::logging::LogLevel::Info);
         }
     }
 }

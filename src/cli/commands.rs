@@ -3,8 +3,8 @@ use crate::analyzer::upgrade::{CompatibilityReport, ExecutionDiff, UpgradeAnalyz
 use crate::analyzer::{security::SecurityAnalyzer, symbolic::SymbolicAnalyzer};
 use crate::cli::args::{
     AnalyzeArgs, CompareArgs, HistoryPruneArgs, InspectArgs, InteractiveArgs, OptimizeArgs,
-    OutputFormat, ProfileArgs, RemoteArgs, ReplArgs, ReplayArgs, RunArgs, ScenarioArgs, ServerArgs,
-    SymbolicArgs, SymbolicProfile, TuiArgs, UpgradeCheckArgs, Verbosity,
+    OutputFormat, ProfileArgs, RemoteAction, RemoteArgs, ReplArgs, ReplayArgs, RunArgs,
+    ScenarioArgs, ServerArgs, SymbolicArgs, SymbolicProfile, TuiArgs, UpgradeCheckArgs, Verbosity,
 };
 use crate::debugger::engine::DebuggerEngine;
 use crate::debugger::instruction_pointer::StepMode;
@@ -533,7 +533,16 @@ pub fn run(args: RunArgs, verbosity: Verbosity) -> Result<()> {
                 token: args.token.clone(),
                 contract: args.contract.clone(),
                 function: args.function.clone(),
+                tls_cert: args.tls_cert.clone(),
+                tls_key: args.tls_key.clone(),
+                tls_ca: None, // RunArgs doesn't have tls_ca, but RemoteArgs does
                 args: args.args.clone(),
+                tls_cert: args.tls_cert.clone(),
+                tls_key: args.tls_key.clone(),
+                tls_ca: args.tls_ca.clone(),
+                timeout_ms: args.timeout * 1000,
+                max_retries: 3,
+                retry_delay_ms: 200,
             },
             verbosity,
         );
@@ -661,10 +670,6 @@ pub fn run(args: RunArgs, verbosity: Verbosity) -> Result<()> {
 
     let mut engine = DebuggerEngine::new(executor, args.breakpoint.clone());
 
-    // Execute locally with debugging
-    // if !args.is_json_output() {
-    //     println!("\n--- Execution Start ---\n");
-    // }
     if args.instruction_debug {
         print_info("Enabling instruction-level debugging...");
         engine.enable_instruction_debug(&wasm_bytes)?;
@@ -1842,12 +1847,48 @@ pub fn remote(args: RemoteArgs, _verbosity: Verbosity) -> Result<()> {
     config.tls_cert = args.tls_cert.clone();
     config.tls_key = args.tls_key.clone();
     config.tls_ca = args.tls_ca.clone();
+    config.timeouts.default = std::time::Duration::from_millis(args.timeout_ms);
+    config.retry.max_attempts = args.max_retries;
+    config.retry.base_delay = std::time::Duration::from_millis(args.retry_delay_ms);
     let mut client = crate::client::RemoteClient::connect_with_config(&args.remote, args.token.clone(), config)?;
 
     if let Some(contract) = &args.contract {
         print_info(format!("Loading contract: {:?}", contract));
         let size = client.load_contract(&contract.to_string_lossy())?;
         print_success(format!("Contract loaded: {} bytes", size));
+    }
+
+    if let Some(action) = &args.action {
+        return match action {
+            RemoteAction::Inspect => {
+                let (function, step_count, paused, call_stack) = client.inspect()?;
+                println!("Function: {}", function.as_deref().unwrap_or("<none>"));
+                println!("Step count: {}", step_count);
+                println!("Paused: {}", paused);
+                if !call_stack.is_empty() {
+                    println!("Call stack:");
+                    for frame in &call_stack {
+                        println!("  {}", frame);
+                    }
+                }
+                Ok(())
+            }
+            RemoteAction::Storage => {
+                let storage_json = client.get_storage()?;
+                println!("{}", storage_json);
+                Ok(())
+            }
+            RemoteAction::Evaluate(eval_args) => {
+                let (result, result_type) =
+                    client.evaluate(&eval_args.expression, eval_args.frame_id)?;
+                if let Some(rtype) = &result_type {
+                    println!("[{}] {}", rtype, result);
+                } else {
+                    println!("{}", result);
+                }
+                Ok(())
+            }
+        };
     }
 
     if let Some(function) = &args.function {
@@ -2272,6 +2313,7 @@ pub async fn repl(args: ReplArgs) -> Result<()> {
         contract_path: args.contract,
         network_snapshot: args.network_snapshot,
         storage: args.storage,
+        watch_keys: args.watch_keys,
     })
     .await
 }

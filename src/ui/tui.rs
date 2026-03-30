@@ -132,7 +132,22 @@ impl DebuggerUI {
                 } else {
                     let function = parts[1].to_string();
                     let args = if parts.len() > 2 {
-                        Some(parts[2..].join(" "))
+                        // Extract raw arguments from the original command string
+                        // to preserve internal whitespace and quotes.
+                        let mut current_pos = 0;
+                        // Skip "run" and function name tokens in the original string.
+                        let tokens = [parts[0], parts[1]];
+                        for token in tokens {
+                            if let Some(pos) = command[current_pos..].find(token) {
+                                current_pos += pos + token.len();
+                            }
+                        }
+                        let raw_args = command[current_pos..].trim();
+                        if raw_args.is_empty() {
+                            None
+                        } else {
+                            Some(raw_args.to_string())
+                        }
                     } else {
                         None
                     };

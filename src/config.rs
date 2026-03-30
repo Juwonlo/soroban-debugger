@@ -23,6 +23,11 @@ pub struct DebugConfig {
     /// Default verbosity level (0-3)
     #[serde(default)]
     pub verbosity: Option<u8>,
+    /// Maximum forward line adjustment for source breakpoints.
+    /// If a breakpoint is set on a non-executable line, the debugger will search
+    /// up to this many lines forward for the nearest executable instruction.
+    #[serde(default)]
+    pub max_forward_line_adjust: Option<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

@@ -527,6 +527,13 @@ pub struct ReplArgs {
     /// Expected SHA-256 hash of the WASM file. If provided, loading will fail if the computed hash does not match.
     #[arg(long)]
     pub expected_hash: Option<String>,
+
+    /// Filter storage output by key pattern (repeatable). Supports:
+    ///   prefix*       — match keys starting with prefix
+    ///   re:<regex>    — match keys by regex
+    ///   exact_key     — match key exactly
+    #[arg(long, value_name = "PATTERN")]
+    pub watch_keys: Vec<String>,
 }
 
 impl ReplArgs {
@@ -1098,6 +1105,33 @@ pub struct RemoteArgs {
     /// Function arguments as JSON array
     #[arg(short, long)]
     pub args: Option<String>,
+
+    /// Remote operation to perform (default: execute or ping)
+    #[command(subcommand)]
+    pub action: Option<RemoteAction>,
+}
+
+#[derive(Subcommand)]
+pub enum RemoteAction {
+    /// Inspect current execution state (function, step count, call stack)
+    Inspect,
+
+    /// Get contract storage state as JSON
+    Storage,
+
+    /// Evaluate an expression in the current debug context
+    Evaluate(RemoteEvaluateArgs),
+}
+
+#[derive(Parser)]
+pub struct RemoteEvaluateArgs {
+    /// Expression to evaluate
+    #[arg(short, long)]
+    pub expression: String,
+
+    /// Stack frame ID for evaluation context (optional)
+    #[arg(long)]
+    pub frame_id: Option<u64>,
 }
 
 #[derive(Parser)]

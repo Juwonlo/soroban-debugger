@@ -18,6 +18,7 @@ pub struct ReplConfig {
     pub contract_path: PathBuf,
     pub network_snapshot: Option<PathBuf>,
     pub storage: Option<String>,
+    pub watch_keys: Vec<String>,
 }
 
 /// Start the REPL interactive session

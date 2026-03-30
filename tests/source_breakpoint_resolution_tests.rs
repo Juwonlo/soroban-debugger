@@ -106,7 +106,7 @@ fn resolves_ambiguous_multi_function_line_as_unverified() {
 
     let exported: HashSet<String> = ["foo".to_string(), "bar".to_string()].into_iter().collect();
     let resolved =
-        sm.resolve_source_breakpoints(&wasm, Path::new("src/contract.rs"), &[10], &exported);
+        sm.resolve_source_breakpoints(&wasm, Path::new("src/contract.rs"), &[10], &exported, None);
 
     assert_eq!(resolved.len(), 1);
     assert!(!resolved[0].verified);
@@ -133,7 +133,7 @@ fn resolves_non_entrypoint_line_as_unverified_not_exported() {
 
     let exported: HashSet<String> = ["foo".to_string()].into_iter().collect();
     let resolved =
-        sm.resolve_source_breakpoints(&wasm, Path::new("src/contract.rs"), &[20], &exported);
+        sm.resolve_source_breakpoints(&wasm, Path::new("src/contract.rs"), &[20], &exported, None);
 
     assert_eq!(resolved.len(), 1);
     assert!(!resolved[0].verified);
@@ -159,7 +159,7 @@ fn resolves_to_next_executable_line_when_requested_line_has_no_code() {
 
     let exported: HashSet<String> = ["foo".to_string(), "bar".to_string()].into_iter().collect();
     let resolved =
-        sm.resolve_source_breakpoints(&wasm, Path::new("src/contract.rs"), &[30], &exported);
+        sm.resolve_source_breakpoints(&wasm, Path::new("src/contract.rs"), &[30], &exported, None);
 
     assert_eq!(resolved.len(), 1);
     assert!(resolved[0].verified);

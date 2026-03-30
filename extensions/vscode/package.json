@@ -126,10 +126,9 @@
                 "minimum": 1,
                 "default": 1
               },
-              "dryRun": {
-                "type": "boolean",
-                "description": "Execute in dry-run mode: simulate execution without persisting storage changes.",
-                "default": false
+              "batchArgs": {
+                "type": "string",
+                "description": "Path to a JSON file containing an array of argument sets for batch execution. Each entry is executed as a separate run with its own args."
               }
             }
           },
