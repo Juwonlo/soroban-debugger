@@ -96,6 +96,7 @@ pub struct BreakpointHit {
 /// Manages breakpoints during debugging
 pub struct BreakpointManager {
     breakpoints: HashMap<String, Breakpoint>,
+    breakpoint_ids: HashMap<String, String>,
 }
 
 impl BreakpointManager {
@@ -103,13 +104,25 @@ impl BreakpointManager {
     pub fn new() -> Self {
         Self {
             breakpoints: HashMap::new(),
+            breakpoint_ids: HashMap::new(),
         }
     }
 
     /// Add or update a breakpoint
     pub fn set(&mut self, breakpoint: Breakpoint) {
-        self.breakpoints
-            .insert(breakpoint.function.clone(), breakpoint);
+        let function = breakpoint.function.clone();
+        let id = breakpoint.id.clone();
+
+        if let Some(existing) = self.breakpoints.get(&function) {
+            self.breakpoint_ids.remove(&existing.id);
+        }
+
+        if let Some(previous_function) = self.breakpoint_ids.get(&id).cloned() {
+            self.breakpoints.remove(&previous_function);
+        }
+
+        self.breakpoint_ids.insert(id, function.clone());
+        self.breakpoints.insert(function, breakpoint);
     }
 
     /// Add a simple breakpoint at a function name (backward compatibility)
@@ -134,7 +147,7 @@ impl BreakpointManager {
 
     /// Remove a breakpoint
     pub fn remove(&mut self, function: &str) -> bool {
-        self.breakpoints.remove(function).is_some()
+        self.remove_breakpoint(function).is_some()
     }
 
     pub fn remove_function(&mut self, function: &str) -> bool {
@@ -142,11 +155,7 @@ impl BreakpointManager {
     }
 
     pub fn remove_by_id(&mut self, id: &str) -> bool {
-        let key = self
-            .breakpoints
-            .iter()
-            .find_map(|(function, breakpoint)| (breakpoint.id == id).then(|| function.clone()));
-        if let Some(function) = key {
+        if let Some(function) = self.breakpoint_ids.remove(id) {
             self.breakpoints.remove(&function).is_some()
         } else {
             false
@@ -256,6 +265,7 @@ impl BreakpointManager {
     /// Clear all breakpoints
     pub fn clear(&mut self) {
         self.breakpoints.clear();
+        self.breakpoint_ids.clear();
     }
 
     /// Check if there are any breakpoints set
@@ -266,6 +276,12 @@ impl BreakpointManager {
     /// Get count of breakpoints
     pub fn count(&self) -> usize {
         self.breakpoints.len()
+    }
+
+    fn remove_breakpoint(&mut self, function: &str) -> Option<Breakpoint> {
+        let breakpoint = self.breakpoints.remove(function)?;
+        self.breakpoint_ids.remove(&breakpoint.id);
+        Some(breakpoint)
     }
 
     /// Parse a condition string into a validated Condition
@@ -790,6 +806,45 @@ mod tests {
         assert!(manager.remove("transfer"));
         assert!(!manager.should_break("transfer"));
         assert!(!manager.remove("transfer")); // Second remove returns false
+    }
+
+    #[test]
+    fn test_remove_breakpoint_by_id() {
+        let mut manager = BreakpointManager::new();
+        manager.add_spec(BreakpointSpec {
+            id: "bp-1".to_string(),
+            function: "transfer".to_string(),
+            condition: None,
+            hit_condition: None,
+            log_message: None,
+        });
+
+        assert!(manager.remove_by_id("bp-1"));
+        assert!(!manager.should_break("transfer"));
+        assert!(!manager.remove_by_id("bp-1"));
+    }
+
+    #[test]
+    fn test_set_replaces_stale_id_index_for_same_function() {
+        let mut manager = BreakpointManager::new();
+        manager.add_spec(BreakpointSpec {
+            id: "bp-1".to_string(),
+            function: "transfer".to_string(),
+            condition: None,
+            hit_condition: None,
+            log_message: None,
+        });
+        manager.add_spec(BreakpointSpec {
+            id: "bp-2".to_string(),
+            function: "transfer".to_string(),
+            condition: None,
+            hit_condition: None,
+            log_message: None,
+        });
+
+        assert!(!manager.remove_by_id("bp-1"));
+        assert!(manager.remove_by_id("bp-2"));
+        assert!(!manager.should_break("transfer"));
     }
 
     #[test]
