@@ -15,6 +15,10 @@ use crate::server::protocol::{DynamicTraceEvent, DynamicTraceEventKind};
 use crate::utils::arguments::ArgumentParser;
 use crate::{DebuggerError, Result};
 
+use indicatif::{ProgressBar, ProgressStyle};
+use serde_json::{json, Value};
+use soroban_env_host::xdr::ScVal;
+use soroban_env_host::{DiagnosticLevel, Host, TryFromVal};
 use soroban_env_host::Host;
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::testutils::Ledger as _;
@@ -516,6 +520,52 @@ impl ContractExecutor {
             .collect())
     }
 
+    fn parse_args(&self, function: &str, args_json: &str) -> Result<Vec<Val>> {
+        let normalized_args_json = self
+            .normalize_args_for_function_signature(function, args_json)
+            .unwrap_or_else(|| args_json.to_string());
+
+        let parser = ArgumentParser::new(self.env.clone());
+        let parser = ArgumentParser::new(self.env.clone());
+        let normalized_args_json = self.normalize_args_for_function(function, args_json)?;
+
+        parser
+            .parse_args_string(&normalized_args_json)
+            .map_err(|e| {
+                warn!("Failed to parse arguments: {}", e);
+                DebuggerError::InvalidArguments(e.to_string()).into()
+            })
+    }
+
+    fn normalize_args_for_function_signature(
+        &self,
+        function: &str,
+        args_json: &str,
+    ) -> Option<String> {
+        let signatures = crate::utils::wasm::parse_function_signatures(&self.wasm_bytes).ok()?;
+        let signature = signatures.into_iter().find(|s| s.name == function)?;
+
+        let Value::Array(mut args) = serde_json::from_str::<Value>(args_json).ok()? else {
+            return None;
+        };
+
+        for (idx, arg) in args.iter_mut().enumerate() {
+            let Some(param) = signature.params.get(idx) else {
+                break;
+            };
+
+            if param.type_name.starts_with("Option<") {
+                let original = arg.clone();
+                *arg = json!({ "type": "option", "value": original });
+    fn normalize_args_for_function(&self, function: &str, args_json: &str) -> Result<String> {
+        let signatures = crate::utils::wasm::parse_function_signatures(&self.wasm_bytes)?;
+        let Some(signature) = signatures.into_iter().find(|sig| sig.name == function) else {
+            return Ok(args_json.to_string());
+        };
+
+        let mut args_value: JsonValue = serde_json::from_str(args_json).map_err(|e| {
+            DebuggerError::InvalidArguments(format!("Invalid JSON in --args: {}", e))
+        })?;
     /// Build a structured dynamic trace for security analysis.
     pub fn get_dynamic_trace(&self) -> Result<Vec<DynamicTraceEvent>> {
         let mut out = self.debug_env.dynamic_events().to_vec();
@@ -529,6 +579,42 @@ impl ContractExecutor {
                 continue;
             }
 
+            if param.type_name.starts_with("Tuple<") {
+                let original = arg.clone();
+                let arity = tuple_arity_from_type_name(&param.type_name)?;
+                *arg = json!({ "type": "tuple", "arity": arity, "value": original });
+            }
+        }
+
+        serde_json::to_string(&args).ok()
+                let arity = tuple_arity_from_type_name(&param.type_name).ok_or_else(|| {
+                    DebuggerError::InvalidArguments(format!(
+                        "Invalid tuple type in function spec for '{}': {}",
+                        param.name, param.type_name
+                    ))
+                })?;
+
+                let JsonValue::Array(actual_arr) = arg else {
+                    return Err(DebuggerError::InvalidArguments(format!(
+                        "Argument '{}' expects tuple with {} elements, got {}",
+                        param.name,
+                        arity,
+                        json_type_name(arg)
+                    ))
+                    .into());
+                };
+
+                if actual_arr.len() != arity {
+                    return Err(DebuggerError::InvalidArguments(format!(
+                        "Tuple arity mismatch: expected {}, got {}",
+                        arity,
+                        actual_arr.len()
+                    ))
+                    .into());
+                }
+
+                *arg = serde_json::json!({"type": "tuple", "arity": arity, "value": actual_arr.clone()});
+            }
             out.push(DynamicTraceEvent {
                 sequence: next_sequence,
                 kind: classify_diagnostic_event_kind(&message),
@@ -602,6 +688,15 @@ impl CancellationToken {
     }
 }
 
+fn tuple_arity_from_type_name(type_name: &str) -> Option<usize> {
+    if !type_name.starts_with("Tuple<") || !type_name.ends_with('>') {
+        return None;
+    }
+
+    let inner = &type_name[6..type_name.len() - 1];
+    let inner = type_name.strip_prefix("Tuple<")?.strip_suffix('>')?;
+    if inner.trim().is_empty() {
+        return Some(0);
 impl Default for CancellationToken {
     fn default() -> Self {
         Self::new()
@@ -704,6 +799,28 @@ mod tests {
     }
 
     #[test]
+    fn parses_tuple_arity_for_simple_tuple() {
+        assert_eq!(tuple_arity_from_type_name("Tuple<U32, Symbol>"), Some(2));
+    }
+
+    #[test]
+    fn parses_tuple_arity_for_nested_tuple_types() {
+        assert_eq!(
+            tuple_arity_from_type_name("Tuple<Option<U32>, Tuple<I32, Symbol>, Vec<Bool>>"),
+            Some(3)
+        );
+    }
+
+    #[test]
+    fn rejects_non_tuple_type_name() {
+        assert_eq!(tuple_arity_from_type_name("Option<U32>"), None);
+    }
+}
+    fn tuple_arity_counts_top_level_types() {
+        assert_eq!(tuple_arity_from_type_name("Tuple<U32, Symbol>"), Some(2));
+        assert_eq!(
+            tuple_arity_from_type_name("Tuple<U32, Option<Vec<Symbol>>, Map<U32, String>>"),
+            Some(3)
     fn test_debug_env_function_call_tracking() {
         let mut debug_env = DebugEnv::new();
 
