@@ -28,23 +28,6 @@ pub enum PluginError {
     VersionMismatch { required: String, found: String },
 
     /// Dependency error
-#[derive(Debug, Clone, thiserror::Error)]
-pub enum PluginError {
-    #[error("Plugin initialization failed: {0}")]
-    InitializationFailed(String),
-
-    #[error("Plugin execution failed: {0}")]
-    ExecutionFailed(String),
-
-    #[error("Plugin not found: {0}")]
-    NotFound(String),
-
-    #[error("Invalid plugin: {0}")]
-    Invalid(String),
-
-    #[error("Version mismatch: required {required}, found {found}")]
-    VersionMismatch { required: String, found: String },
-
     #[error("Dependency error: {0}")]
     DependencyError(String),
 

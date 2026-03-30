@@ -530,8 +530,9 @@ impl SourceMap {
         source_path: &Path,
         requested_lines: &[u32],
         exported_functions: &HashSet<String>,
+        max_forward: Option<u32>,
     ) -> Vec<SourceBreakpointResolution> {
-        const MAX_FORWARD_LINE_ADJUST: u32 = 20;
+        let max_forward = max_forward.unwrap_or(20);
 
         if requested_lines.is_empty() {
             return Vec::new();
@@ -643,7 +644,7 @@ impl SourceMap {
                     if let Some((next_line, offsets)) =
                         line_to_offsets.range(*requested_line..).next()
                     {
-                        if next_line.saturating_sub(*requested_line) <= MAX_FORWARD_LINE_ADJUST {
+                        if next_line.saturating_sub(*requested_line) <= max_forward {
                             found = Some((*next_line, offsets));
                         }
                     }

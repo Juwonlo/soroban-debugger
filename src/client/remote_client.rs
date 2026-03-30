@@ -48,6 +48,7 @@ impl Default for RetryPolicy {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct RemoteClientConfig {
     pub timeouts: RequestTimeouts,
     pub retry: RetryPolicy,
@@ -194,16 +195,12 @@ impl RemoteClient {
                 }
             }
 
-            let mut client_config = ClientConfig::builder()
-                .with_safe_defaults()
-                .with_root_certificates(root_store);
-
-            if let (Some(ref cert_path), Some(ref key_path)) = (&config.tls_cert, &config.tls_key) {
+            let client_config = if let (Some(ref cert_path), Some(ref key_path)) = (&config.tls_cert, &config.tls_key) {
                 let cert_file = std::fs::File::open(cert_path).map_err(|e| {
                     DebuggerError::FileError(format!("Failed to open client cert {:?}: {}", cert_path, e))
                 })?;
                 let mut cert_reader = BufReader::new(cert_file);
-                let certs = rustls_pemfile::certs(&mut cert_reader)
+                let certs: Vec<Certificate> = rustls_pemfile::certs(&mut cert_reader)
                     .map_err(|e| DebuggerError::FileError(format!("Failed to parse client cert: {}", e)))?
                     .into_iter()
                     .map(Certificate)
@@ -217,13 +214,25 @@ impl RemoteClient {
                     .map_err(|e| DebuggerError::FileError(format!("Failed to parse client key: {}", e)))?;
                 
                 if let Some(key) = keys.into_iter().next() {
-                    client_config = client_config.with_client_auth_cert(certs, PrivateKey(key)).map_err(|e| {
-                        DebuggerError::FileError(format!("Failed to set client certificate: {}", e))
-                    })?;
+                    ClientConfig::builder()
+                        .with_safe_defaults()
+                        .with_root_certificates(root_store)
+                        .with_client_auth_cert(certs, PrivateKey(key))
+                        .map_err(|e| {
+                            DebuggerError::FileError(format!("Failed to set client certificate: {}", e))
+                        })?
+                } else {
+                    ClientConfig::builder()
+                        .with_safe_defaults()
+                        .with_root_certificates(root_store)
+                        .with_no_client_auth()
                 }
             } else {
-                client_config = client_config.with_no_client_auth();
-            }
+                ClientConfig::builder()
+                    .with_safe_defaults()
+                    .with_root_certificates(root_store)
+                    .with_no_client_auth()
+            };
 
             let host = addr.split(':').next().unwrap_or("localhost");
             let server_name = ServerName::try_from(host).map_err(|e| {

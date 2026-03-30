@@ -17,6 +17,7 @@ pub struct ReplExecutor {
     engine: crate::debugger::engine::DebuggerEngine,
     signatures: HashMap<String, ContractFunctionSignature>,
     address_aliases: HashMap<String, String>,
+    alias_path: std::path::PathBuf,
 }
 
 impl ReplExecutor {
@@ -52,10 +53,24 @@ impl ReplExecutor {
                 .set_initial_storage(storage_json.clone())?;
         }
 
+        let alias_path = dirs::home_dir()
+            .unwrap_or_else(|| std::env::temp_dir())
+            .join(".soroban_repl_aliases.json");
+
+        let address_aliases = if alias_path.exists() {
+            fs::read_to_string(&alias_path)
+                .ok()
+                .and_then(|s| serde_json::from_str(&s).ok())
+                .unwrap_or_default()
+        } else {
+            HashMap::new()
+        };
+
         Ok(ReplExecutor {
             engine,
             signatures,
-            address_aliases: HashMap::new(),
+            address_aliases,
+            alias_path,
         })
     }
 
@@ -169,6 +184,10 @@ impl ReplExecutor {
                     crate::logging::LogLevel::Info,
                 );
                 self.address_aliases.insert(raw.to_string(), generated);
+                // Persist aliases to disk
+                if let Ok(json) = serde_json::to_string_pretty(&self.address_aliases) {
+                    let _ = fs::write(&self.alias_path, json);
+                }
             }
             self.address_aliases
                 .get(raw)

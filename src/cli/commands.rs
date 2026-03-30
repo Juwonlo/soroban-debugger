@@ -533,6 +533,9 @@ pub fn run(args: RunArgs, verbosity: Verbosity) -> Result<()> {
                 token: args.token.clone(),
                 contract: args.contract.clone(),
                 function: args.function.clone(),
+                tls_cert: args.tls_cert.clone(),
+                tls_key: args.tls_key.clone(),
+                tls_ca: None, // RunArgs doesn't have tls_ca, but RemoteArgs does
                 args: args.args.clone(),
             },
             verbosity,
