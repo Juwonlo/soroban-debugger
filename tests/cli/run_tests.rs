@@ -167,3 +167,55 @@ fn test_run_accepts_dry_run_flag() {
         ])
         .output();
 }
+
+#[test]
+fn test_remote_inspect_subcommand_accepted() {
+    let mut cmd = assert_cmd::Command::cargo_bin("soroban-debug").expect("Failed to find binary");
+    cmd.args(["remote", "--remote", "127.0.0.1:9229", "inspect"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("Connection").or(predicate::str::contains("connect")));
+}
+
+#[test]
+fn test_remote_storage_subcommand_accepted() {
+    let mut cmd = assert_cmd::Command::cargo_bin("soroban-debug").expect("Failed to find binary");
+    cmd.args(["remote", "--remote", "127.0.0.1:9229", "storage"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("Connection").or(predicate::str::contains("connect")));
+}
+
+#[test]
+fn test_remote_evaluate_subcommand_accepted() {
+    let mut cmd = assert_cmd::Command::cargo_bin("soroban-debug").expect("Failed to find binary");
+    cmd.args([
+        "remote",
+        "--remote",
+        "127.0.0.1:9229",
+        "evaluate",
+        "--expression",
+        "1 + 1",
+    ])
+    .assert()
+    .failure()
+    .stderr(predicate::str::contains("Connection").or(predicate::str::contains("connect")));
+}
+
+#[test]
+fn test_remote_evaluate_with_frame_id() {
+    let mut cmd = assert_cmd::Command::cargo_bin("soroban-debug").expect("Failed to find binary");
+    cmd.args([
+        "remote",
+        "--remote",
+        "127.0.0.1:9229",
+        "evaluate",
+        "--expression",
+        "x",
+        "--frame-id",
+        "0",
+    ])
+    .assert()
+    .failure()
+    .stderr(predicate::str::contains("Connection").or(predicate::str::contains("connect")));
+}

@@ -585,6 +585,30 @@ impl RemoteClient {
         }
     }
 
+    /// Evaluate an expression in the current debug context
+    pub fn evaluate(&mut self, expression: &str, frame_id: Option<u64>) -> Result<(String, Option<String>)> {
+        let response = self.send_request_with_retry(
+            DebugRequest::Evaluate {
+                expression: expression.to_string(),
+                frame_id,
+            },
+            RequestClass::Default,
+            true,
+        )?;
+
+        match response {
+            DebugResponse::EvaluateResult {
+                result,
+                result_type,
+                ..
+            } => Ok((result, result_type)),
+            DebugResponse::Error { message } => Err(DebuggerError::ExecutionError(message).into()),
+            _ => Err(
+                DebuggerError::ExecutionError("Unexpected response to Evaluate".to_string()).into(),
+            ),
+        }
+    }
+
     /// Ping the server
     pub fn ping(&mut self) -> Result<()> {
         let response =

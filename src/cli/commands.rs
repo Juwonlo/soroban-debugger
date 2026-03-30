@@ -3,8 +3,8 @@ use crate::analyzer::upgrade::{CompatibilityReport, ExecutionDiff, UpgradeAnalyz
 use crate::analyzer::{security::SecurityAnalyzer, symbolic::SymbolicAnalyzer};
 use crate::cli::args::{
     AnalyzeArgs, CompareArgs, HistoryPruneArgs, InspectArgs, InteractiveArgs, OptimizeArgs,
-    OutputFormat, ProfileArgs, RemoteArgs, ReplArgs, ReplayArgs, RunArgs, ScenarioArgs, ServerArgs,
-    SymbolicArgs, SymbolicProfile, TuiArgs, UpgradeCheckArgs, Verbosity,
+    OutputFormat, ProfileArgs, RemoteAction, RemoteArgs, ReplArgs, ReplayArgs, RunArgs,
+    ScenarioArgs, ServerArgs, SymbolicArgs, SymbolicProfile, TuiArgs, UpgradeCheckArgs, Verbosity,
 };
 use crate::debugger::engine::DebuggerEngine;
 use crate::debugger::instruction_pointer::StepMode;
@@ -1855,6 +1855,39 @@ pub fn remote(args: RemoteArgs, _verbosity: Verbosity) -> Result<()> {
         print_info(format!("Loading contract: {:?}", contract));
         let size = client.load_contract(&contract.to_string_lossy())?;
         print_success(format!("Contract loaded: {} bytes", size));
+    }
+
+    if let Some(action) = &args.action {
+        return match action {
+            RemoteAction::Inspect => {
+                let (function, step_count, paused, call_stack) = client.inspect()?;
+                println!("Function: {}", function.as_deref().unwrap_or("<none>"));
+                println!("Step count: {}", step_count);
+                println!("Paused: {}", paused);
+                if !call_stack.is_empty() {
+                    println!("Call stack:");
+                    for frame in &call_stack {
+                        println!("  {}", frame);
+                    }
+                }
+                Ok(())
+            }
+            RemoteAction::Storage => {
+                let storage_json = client.get_storage()?;
+                println!("{}", storage_json);
+                Ok(())
+            }
+            RemoteAction::Evaluate(eval_args) => {
+                let (result, result_type) =
+                    client.evaluate(&eval_args.expression, eval_args.frame_id)?;
+                if let Some(rtype) = &result_type {
+                    println!("[{}] {}", rtype, result);
+                } else {
+                    println!("{}", result);
+                }
+                Ok(())
+            }
+        };
     }
 
     if let Some(function) = &args.function {

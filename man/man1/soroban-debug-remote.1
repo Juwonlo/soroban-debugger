@@ -4,9 +4,23 @@
 .SH NAME
 remote \- Connect to remote debug server
 .SH SYNOPSIS
-\fBremote\fR <\fB\-r\fR|\fB\-\-remote\fR> [\fB\-t\fR|\fB\-\-token\fR] [\fB\-c\fR|\fB\-\-contract\fR] [\fB\-f\fR|\fB\-\-function\fR] [\fB\-\-tls\-cert\fR] [\fB\-\-tls\-key\fR] [\fB\-\-tls\-ca\fR] [\fB\-a\fR|\fB\-\-args\fR] [\fB\-h\fR|\fB\-\-help\fR] 
+\fBremote\fR <\fB\-r\fR|\fB\-\-remote\fR> [\fB\-t\fR|\fB\-\-token\fR] [\fB\-c\fR|\fB\-\-contract\fR] [\fB\-f\fR|\fB\-\-function\fR] [\fB\-\-tls\-cert\fR] [\fB\-\-tls\-key\fR] [\fB\-\-tls\-ca\fR] [\fB\-a\fR|\fB\-\-args\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fIsubcommand\fR]
 .SH DESCRIPTION
-Connect to remote debug server
+Connect to remote debug server. Without a subcommand, executes a function (if
+\fB\-\-function\fR is given) or pings the server. Subcommands provide richer
+operations on an active debug session.
+.SH SUBCOMMANDS
+.TP
+\fBinspect\fR
+Inspect current execution state: function name, step count, paused flag, and
+call stack.
+.TP
+\fBstorage\fR
+Retrieve the contract storage state as JSON.
+.TP
+\fBevaluate\fR \fB\-\-expression\fR \fI<EXPR>\fR [\fB\-\-frame\-id\fR \fI<ID>\fR]
+Evaluate an expression in the current debug context. Optionally specify a
+stack frame ID for evaluation scope.
 .SH OPTIONS
 .TP
 \fB\-r\fR, \fB\-\-remote\fR \fI<REMOTE>\fR
