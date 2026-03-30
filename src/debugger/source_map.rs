@@ -337,18 +337,17 @@ impl SourceMap {
                 // load() failed partway through: any mappings collected are
                 // partial. Downgrade "source" → "partial-source" so the mode
                 // accurately reflects that the parse did not complete.
-                let (fallback_mode, fallback_message) = if mappings_count > 0
-                    && fallback_mode == "source"
-                {
-                    (
-                        "partial-source".to_string(),
-                        "DWARF parse failed after collecting some mappings; \
+                let (fallback_mode, fallback_message) =
+                    if mappings_count > 0 && fallback_mode == "source" {
+                        (
+                            "partial-source".to_string(),
+                            "DWARF parse failed after collecting some mappings; \
                          results may be incomplete."
-                            .to_string(),
-                    )
-                } else {
-                    (fallback_mode, fallback_message)
-                };
+                                .to_string(),
+                        )
+                    } else {
+                        (fallback_mode, fallback_message)
+                    };
 
                 Ok(SourceMapInspectionReport {
                     mappings_count,
@@ -553,6 +552,12 @@ impl SourceMap {
         };
 
         let requested_norm = normalize_path_for_match(source_path);
+        let filename_ambiguous = is_filename_ambiguous(
+            self.offsets
+                .values()
+                .map(|loc| normalize_path_for_match(&loc.file)),
+            &requested_norm,
+        );
         let mut line_to_offsets: BTreeMap<u32, Vec<usize>> = BTreeMap::new();
         let mut file_match_count = 0usize;
 
@@ -562,7 +567,11 @@ impl SourceMap {
                 continue;
             }
 
-            if !paths_match_normalized(&normalize_path_for_match(&loc.file), &requested_norm) {
+            if !paths_match_normalized(
+                &normalize_path_for_match(&loc.file),
+                &requested_norm,
+                filename_ambiguous,
+            ) {
                 continue;
             }
 
@@ -881,7 +890,7 @@ fn normalize_path_for_match(path: &Path) -> String {
         .to_ascii_lowercase()
 }
 
-fn paths_match_normalized(a: &str, b: &str) -> bool {
+fn paths_match_normalized(a: &str, b: &str, filename_ambiguous: bool) -> bool {
     if a == b {
         return true;
     }
@@ -892,7 +901,45 @@ fn paths_match_normalized(a: &str, b: &str) -> bool {
 
     let a_file = a.rsplit('/').next().unwrap_or(a);
     let b_file = b.rsplit('/').next().unwrap_or(b);
-    a_file == b_file
+    if a_file != b_file {
+        return false;
+    }
+
+    if !filename_ambiguous {
+        return true;
+    }
+
+    suffix_components_match(a, b, 2)
+}
+
+fn suffix_components_match(a: &str, b: &str, components: usize) -> bool {
+    let a_parts: Vec<&str> = a.split('/').filter(|part| !part.is_empty()).collect();
+    let b_parts: Vec<&str> = b.split('/').filter(|part| !part.is_empty()).collect();
+    if a_parts.len() < components || b_parts.len() < components {
+        return false;
+    }
+
+    a_parts[a_parts.len() - components..] == b_parts[b_parts.len() - components..]
+}
+
+fn is_filename_ambiguous<I>(paths: I, requested: &str) -> bool
+where
+    I: Iterator<Item = String>,
+{
+    let requested_file = requested.rsplit('/').next().unwrap_or(requested);
+    let mut matching_paths: HashSet<String> = HashSet::new();
+
+    for path in paths {
+        let file = path.rsplit('/').next().unwrap_or(&path);
+        if file == requested_file {
+            matching_paths.insert(path);
+            if matching_paths.len() > 1 {
+                return true;
+            }
+        }
+    }
+
+    false
 }
 
 #[cfg(test)]
@@ -1211,5 +1258,41 @@ mod tests {
         assert!(resolved[0].message.contains("[AMBIGUOUS]"));
         assert!(resolved[0].message.contains("alpha"));
         assert!(resolved[0].message.contains("beta"));
+    }
+
+    #[test]
+    fn resolve_source_breakpoints_disambiguates_same_filename_by_parent_directory() {
+        let wasm = wasm_with_functions_and_exports(&[("alpha", 0), ("beta", 1)], 2);
+        let index = WasmIndex::parse(&wasm).unwrap();
+        let alpha_offset = index.function_bodies[0].0.start;
+        let beta_offset = index.function_bodies[1].0.start;
+
+        let mut sm = SourceMap::new();
+        sm.add_mapping(
+            alpha_offset,
+            SourceLocation {
+                file: PathBuf::from("/workspace/crate_a/src/lib.rs"),
+                line: 10,
+                column: None,
+            },
+        );
+        sm.add_mapping(
+            beta_offset,
+            SourceLocation {
+                file: PathBuf::from("/workspace/crate_b/src/lib.rs"),
+                line: 10,
+                column: None,
+            },
+        );
+
+        let exported_functions = HashSet::from([String::from("alpha"), String::from("beta")]);
+        let requested_path = PathBuf::from("crate_a/src/lib.rs");
+        let resolved =
+            sm.resolve_source_breakpoints(&wasm, &requested_path, &[10], &exported_functions);
+
+        assert_eq!(resolved.len(), 1);
+        assert!(resolved[0].verified);
+        assert_eq!(resolved[0].reason_code, "OK");
+        assert_eq!(resolved[0].function.as_deref(), Some("alpha"));
     }
 }
