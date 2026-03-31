@@ -1,9 +1,13 @@
 use assert_cmd::Command;
 use predicates::prelude::*;
+#[cfg(feature = "network-tests")]
 use std::path::PathBuf;
+#[cfg(feature = "network-tests")]
 use std::process::Command as StdCommand;
+#[cfg(feature = "network-tests")]
 use std::time::Duration;
 
+#[cfg(feature = "network-tests")]
 mod network;
 
 #[test]
