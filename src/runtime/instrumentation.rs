@@ -218,3 +218,79 @@ impl Default for Instrumenter {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Minimal valid WASM module with one empty function body.
+    const MINIMAL_WASM: &[u8] = &[
+        0x00, 0x61, 0x73, 0x6d, // magic
+        0x01, 0x00, 0x00, 0x00, // version
+        0x01, 0x04, 0x01, 0x60, 0x00, 0x00, // type section
+        0x03, 0x02, 0x01, 0x00, // function section
+        0x0a, 0x04, 0x01, 0x02, 0x00, 0x0b, // code section
+    ];
+
+    #[test]
+    fn instruction_counter_tracks_and_sorts_counts() {
+        let counter = InstructionCounter::new();
+        counter.increment("foo", 2);
+        counter.increment("bar", 5);
+        counter.increment("foo", 3);
+
+        assert_eq!(counter.get("foo"), 5);
+        assert_eq!(counter.get("bar"), 5);
+        assert_eq!(counter.get_total(), 10);
+
+        let sorted = counter.get_sorted();
+        assert_eq!(sorted.len(), 2);
+        assert_eq!(sorted[0].1, 5);
+        assert_eq!(sorted[1].1, 5);
+    }
+
+    #[test]
+    fn instruction_counter_reset_clears_state() {
+        let counter = InstructionCounter::new();
+        counter.increment("foo", 9);
+        counter.increment("bar", 1);
+        counter.reset();
+
+        assert_eq!(counter.get("foo"), 0);
+        assert_eq!(counter.get("bar"), 0);
+        assert_eq!(counter.get_total(), 0);
+        assert!(counter.get_sorted().is_empty());
+    }
+
+    #[test]
+    fn parse_only_extracts_instructions_and_hook_runs() {
+        let mut instrumenter = Instrumenter::parse_only(MINIMAL_WASM)
+            .expect("minimal wasm should parse for parse_only");
+        assert!(!instrumenter.instructions().is_empty());
+
+        instrumenter.set_hook(|idx, instruction| idx == 0 && !instruction.name().is_empty());
+        assert!(instrumenter.call_hook(0));
+        assert!(!instrumenter.call_hook(usize::MAX));
+    }
+
+    #[test]
+    fn instrumentation_passthrough_when_disabled_or_missing_hook() {
+        let mut instrumenter = Instrumenter::new();
+        let out = instrumenter
+            .instrument(MINIMAL_WASM)
+            .expect("disabled instrumenter should pass through");
+        assert_eq!(out, MINIMAL_WASM);
+
+        instrumenter.enable();
+        let out_no_hook = instrumenter
+            .instrument(MINIMAL_WASM)
+            .expect("enabled instrumenter without hook should pass through");
+        assert_eq!(out_no_hook, MINIMAL_WASM);
+    }
+
+    #[test]
+    fn parse_only_rejects_invalid_wasm() {
+        let err = Instrumenter::parse_only(&[0xde, 0xad, 0xbe, 0xef]).unwrap_err();
+        assert!(err.contains("WASM"));
+    }
+}
