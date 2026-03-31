@@ -18,6 +18,7 @@ pub struct ReplExecutor {
     signatures: HashMap<String, ContractFunctionSignature>,
     address_aliases: HashMap<String, String>,
     alias_path: std::path::PathBuf,
+    watch_keys: Vec<String>,
 }
 
 impl ReplExecutor {
@@ -71,6 +72,7 @@ impl ReplExecutor {
             signatures,
             address_aliases,
             alias_path,
+            watch_keys: config.watch_keys.clone(),
         })
     }
 
