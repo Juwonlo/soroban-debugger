@@ -397,6 +397,10 @@ export class DebuggerProcess {
           },
         });
         this.childProcess = child;
+        // Always drain child output streams to prevent pipe backpressure from
+        // blocking the debugger server process.
+        child.stdout?.resume();
+        child.stderr?.resume();
 
         child.once("exit", () => {
           this.rejectPendingRequests(new Error("Debugger server exited"));
