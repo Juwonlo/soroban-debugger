@@ -7,6 +7,7 @@ mod error_tests;
 mod help_tests;
 #[path = "cli/inspect_tests.rs"]
 mod inspect_tests;
+#[cfg(feature = "network-tests")]
 pub mod network;
 #[path = "cli/output_tests.rs"]
 mod output_tests;

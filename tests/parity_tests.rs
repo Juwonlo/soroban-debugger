@@ -13,6 +13,7 @@
 
 #![allow(deprecated)]
 
+#[cfg(feature = "network-tests")]
 mod network;
 
 use assert_cmd::Command;
