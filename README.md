@@ -130,6 +130,30 @@ Then use commands like:
 
 ## Commands
 
+### Command Index (Current CLI Surface)
+
+Use `soroban-debug <command> --help` for full flags and examples.
+
+| Command | Purpose |
+| --- | --- |
+| `run` | Execute a contract function with debugger controls, tracing, breakpoints, storage import/export, and JSON output. |
+| `interactive` | Start an interactive debugger session in terminal mode. |
+| `repl` | Open a contract REPL for repeated calls and exploration. |
+| `tui` | Launch the full-screen terminal dashboard debugger. |
+| `inspect` | Inspect contract metadata/functions without executing a call. |
+| `upgrade-check` | Compare two WASM builds for upgrade compatibility and API changes. |
+| `completions` | Generate shell completion scripts. |
+| `optimize` | Produce optimization suggestions from contract analysis. |
+| `profile` | Profile execution hotspots and budget-heavy paths. |
+| `compare` | Compare two execution trace JSON files and render diffs. |
+| `replay` | Replay execution from a saved trace export. |
+| `symbolic` | Explore input space with symbolic analysis and reproducible seed/replay mode. |
+| `server` | Run debugger as a remote server process (for CLI/DAP clients). |
+| `remote` | Connect to a running remote debugger server. |
+| `analyze` | Run static/dynamic security analysis rules. |
+| `scenario` | Run multi-step scenario files (`.toml`) for regression and CI workflows. |
+| `history-prune` | Enforce retention policies and compact run history data. |
+
 ### Run Command
 
 Execute a contract function with the debugger:
@@ -805,6 +829,147 @@ soroban-debugger/
 ├── tests/                   Integration tests
 └── examples/                Example contracts and tutorials
 ``` -->
+
+## Verified Status (2026-04-03)
+
+The following commands were executed successfully in this environment:
+
+- `bash run_local_ci.sh`
+- `bash scripts/test_benchmark_regressions.sh`
+- `bash scripts/check_benchmark_regressions.sh selftest-coverage-missing-field`
+- `npm --prefix extensions/vscode ci`
+- `npm --prefix extensions/vscode run build`
+- `npm --prefix extensions/vscode run check:dist`
+- `npm --prefix extensions/vscode run test:all`
+
+Observed limitations in this environment:
+
+- VS Code E2E loopback tests are skipped in `test:all` when loopback networking is restricted.
+- `cargo publish --dry-run -p soroban-debugger` cannot complete here because DNS resolution to `index.crates.io` is blocked.
+- `cargo llvm-cov` was not installed locally in this environment, so coverage generation was not re-run locally.
+
+CI bench job fix applied:
+
+- Benchmark baseline worktree checkout uses detached mode (`git worktree add --detach`) with `origin/main` fallback logic, preventing failures when `main` is already checked out in the primary worktree.
+- Coverage JSON parsing now reads stdout-only from `cargo llvm-cov --json --summary-only` to avoid stderr noise corrupting JSON parsing.
+
+## Deploying Without VS Code Extension
+
+You can deploy and run the debugger entirely as a CLI/server toolchain with no VS Code dependency.
+
+### 1) Build and install CLI
+
+```bash
+git clone https://github.com/Timi16/soroban-debugger.git
+cd soroban-debugger
+cargo build --release
+cargo install --path .
+```
+
+### 2) Run locally (single machine)
+
+```bash
+soroban-debug run \
+  --contract ./target/wasm32-unknown-unknown/release/contract.wasm \
+  --function transfer \
+  --args '["Alice","Bob",100]'
+```
+
+### 3) Run as remote debug server
+
+```bash
+soroban-debug server \
+  --host 0.0.0.0 \
+  --port 9229 \
+  --token "$SOROBAN_DEBUG_TOKEN"
+```
+
+Optional TLS:
+
+```bash
+soroban-debug server \
+  --host 0.0.0.0 \
+  --port 9229 \
+  --token "$SOROBAN_DEBUG_TOKEN" \
+  --tls-cert /etc/soroban-debug/cert.pem \
+  --tls-key /etc/soroban-debug/key.pem
+```
+
+### 4) Connect from another machine (CLI client)
+
+```bash
+soroban-debug remote \
+  --remote your-host-or-ip:9229 \
+  --token "$SOROBAN_DEBUG_TOKEN" \
+  --contract ./target/wasm32-unknown-unknown/release/contract.wasm \
+  --function transfer \
+  --args '["Alice","Bob",100]'
+```
+
+### 5) Recommended production hardening
+
+- Always set a token for non-local use.
+- Prefer TLS on untrusted networks.
+- Restrict bind interfaces and firewall inbound port `9229`.
+- Keep client/server versions aligned to the same release line.
+
+## Publish Runbook (crates.io + GitHub)
+
+This repository publishes the main crate `soroban-debugger`. The helper crate `soroban-debug-mock` is currently `publish = false`.
+
+### 1) Prepare release metadata
+
+1. Bump crate version in `Cargo.toml` (`[package].version`).
+2. Update release notes/changelog.
+3. If publishing VS Code extension in the same release, also bump `extensions/vscode/package.json` version.
+
+### 2) Run release gates
+
+```bash
+bash run_local_ci.sh
+bash scripts/test_benchmark_regressions.sh
+bash scripts/check_benchmark_regressions.sh
+npm --prefix extensions/vscode ci
+npm --prefix extensions/vscode run build
+npm --prefix extensions/vscode run check:dist
+npm --prefix extensions/vscode run test:all
+```
+
+### 3) Dry-run crates publish
+
+```bash
+cargo login <CRATES_IO_TOKEN>
+cargo publish --dry-run -p soroban-debugger
+```
+
+If dry-run fails with DNS/network errors, rerun from a network with access to `index.crates.io`.
+
+### 4) Publish to crates.io
+
+```bash
+cargo publish -p soroban-debugger
+```
+
+### 5) Tag and publish GitHub release
+
+```bash
+git tag vX.Y.Z
+git push origin main --tags
+gh release create vX.Y.Z --generate-notes
+```
+
+### 6) Post-publish verification
+
+```bash
+cargo install soroban-debugger --version X.Y.Z
+soroban-debug --version
+```
+
+Also verify:
+
+- `https://crates.io/crates/soroban-debugger` shows the new version.
+- `https://docs.rs/soroban-debugger` builds successfully for the new version.
+- GitHub release notes include upgrade guidance and any known caveats.
 
 ## Development
 
