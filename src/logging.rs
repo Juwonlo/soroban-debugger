@@ -18,6 +18,23 @@ pub fn log_display<D: fmt::Display>(message: D, level: LogLevel) {
     }
 }
 
+pub fn log_plugin_incident(report: &crate::output::PluginIncidentReport) {
+    tracing::error!(
+        plugin = report.plugin.as_str(),
+        plugin_version = report.plugin_version.as_deref().unwrap_or("unknown"),
+        library_path = report.library_path.as_deref().unwrap_or("unknown"),
+        invocation_kind = report.invocation_kind.as_str(),
+        incident = match report.incident {
+            crate::output::PluginIncidentType::Panic => "panic",
+            crate::output::PluginIncidentType::Timeout => "timeout",
+        },
+        action_taken = report.action_taken.as_str(),
+        core_debugger_status = report.core_debugger_status.as_str(),
+        "{}",
+        report.message
+    );
+}
+
 /// Log levels matching tracing crate levels.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LogLevel {

@@ -6,6 +6,14 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use tracing::{error, info, warn};
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PluginRuntimeDescriptor {
+    pub name: String,
+    pub version: String,
+    pub library_path: PathBuf,
+    pub trusted: bool,
+}
+
 /// A loaded plugin instance
 pub struct LoadedPlugin {
     /// The plugin instance
@@ -49,6 +57,15 @@ impl LoadedPlugin {
     /// Get trust assessment details for the loaded plugin
     pub fn trust(&self) -> &PluginTrustAssessment {
         &self.trust
+    }
+
+    pub fn runtime_descriptor(&self) -> PluginRuntimeDescriptor {
+        PluginRuntimeDescriptor {
+            name: self.manifest.name.clone(),
+            version: self.manifest.version.clone(),
+            library_path: self.path.clone(),
+            trusted: self.trust.trusted,
+        }
     }
 
     #[cfg(test)]

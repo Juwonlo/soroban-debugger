@@ -21,6 +21,43 @@ pub struct OutputError {
     pub message: String,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum PluginIncidentType {
+    Panic,
+    Timeout,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct PluginIncidentReport {
+    pub plugin: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub plugin_version: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub library_path: Option<String>,
+    pub invocation_kind: String,
+    pub incident: PluginIncidentType,
+    pub action_taken: String,
+    pub core_debugger_status: String,
+    pub message: String,
+}
+
+impl PluginIncidentReport {
+    pub fn summary_line(&self) -> String {
+        format!(
+            "Plugin incident: '{}' {} during {}. Action: {}. Core debugger status: {}.",
+            self.plugin,
+            match self.incident {
+                PluginIncidentType::Panic => "panicked",
+                PluginIncidentType::Timeout => "timed out",
+            },
+            self.invocation_kind,
+            self.action_taken,
+            self.core_debugger_status
+        )
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct VersionedOutput<T>
 where

@@ -42,6 +42,18 @@ pub enum PluginError {
     /// Plugin has been temporarily disabled by the circuit breaker
     #[error("Plugin circuit breaker open: {0}")]
     CircuitOpen(String),
+
+    /// Plugin panicked; the core debugger contained the failure
+    #[error("Plugin '{plugin}' panicked during {operation}: {details}")]
+    Panic {
+        plugin: String,
+        operation: String,
+        details: String,
+    },
+
+    /// Plugin has been disabled for the current session after an incident
+    #[error("Plugin '{plugin}' disabled for current session: {reason}")]
+    SessionDisabled { plugin: String, reason: String },
 }
 
 /// Custom CLI command that a plugin can provide.

@@ -3,8 +3,10 @@ use super::events::{
     EventContext, ExecutionEvent, PluginInvocationKind, PluginInvocationOutcome,
     PluginTelemetryEvent,
 };
-use super::loader::{LoadedPlugin, PluginLoader, PluginTrustPolicy};
+use super::loader::{LoadedPlugin, PluginLoader, PluginRuntimeDescriptor, PluginTrustPolicy};
 use super::manifest::PluginCapabilities;
+use crate::logging;
+use crate::output::{PluginIncidentReport, PluginIncidentType};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt;
 use std::panic::{catch_unwind, AssertUnwindSafe};
@@ -507,14 +509,17 @@ struct PluginHealth {
     consecutive_failures: usize,
     timeout_count: usize,
     circuit_open: bool,
+    session_disabled: bool,
     total_failures: usize,
     total_timeouts: usize,
     total_panics: usize,
     last_error: Option<String>,
+    last_incident: Option<PluginIncidentReport>,
 }
 
 struct InvocationMetadata<'a> {
     name: &'a str,
+    descriptor: PluginRuntimeDescriptor,
     kind: PluginInvocationKind,
     timeout: Duration,
     elapsed: Duration,
@@ -937,6 +942,12 @@ impl PluginRegistry {
                     if health.circuit_open {
                         stats.open_circuits += 1;
                     }
+                    if health.session_disabled {
+                        stats.session_disabled += 1;
+                    }
+                    if health.last_incident.is_some() {
+                        stats.plugin_incidents += 1;
+                    }
                 }
             }
         }
@@ -1050,37 +1061,46 @@ impl PluginRegistry {
         context: &mut EventContext,
     ) -> PluginResult<()> {
         if Self::circuit_open(health, name) {
+            let message = Self::disabled_message(health, name, PluginInvocationKind::Hook)
+                .unwrap_or_else(|| {
+                    "Plugin hook skipped because the circuit breaker is open.".to_string()
+                });
             Self::push_telemetry(
                 context,
                 name,
                 PluginInvocationKind::Hook,
                 PluginInvocationOutcome::SkippedCircuitOpen,
                 0,
-                "Plugin hook skipped because the circuit breaker is open.".to_string(),
+                message,
             );
             return Ok(());
         }
 
-        let start = Instant::now();
-        let result = {
+        let (descriptor, result, elapsed) = {
+            let start = Instant::now();
             let mut plugin = plugin_arc.write().map_err(|_| {
                 PluginError::ExecutionFailed(format!("Failed to acquire plugin lock: {}", name))
             })?;
-            catch_unwind(AssertUnwindSafe(|| {
+            let descriptor = plugin.runtime_descriptor();
+            let result = catch_unwind(AssertUnwindSafe(|| {
                 plugin.plugin_mut().on_event(event, context)
-            }))
+            }));
+            (descriptor, result, start.elapsed())
         };
         self.record_outcome(
             health,
             Some(context),
             InvocationMetadata {
                 name,
+                descriptor,
                 kind: PluginInvocationKind::Hook,
                 timeout: self.policy.hook_timeout,
-                elapsed: start.elapsed(),
+                elapsed,
             },
-            result.map_err(|_| {
-                PluginError::ExecutionFailed("Plugin panicked during hook execution".to_string())
+            result.map_err(|payload| PluginError::Panic {
+                plugin: name.to_string(),
+                operation: "hook execution".to_string(),
+                details: Self::panic_payload_message(payload),
             }),
         )
     }
@@ -1094,32 +1114,39 @@ impl PluginRegistry {
         args: &[String],
     ) -> PluginResult<String> {
         if Self::circuit_open(health, name) {
-            return Err(PluginError::CircuitOpen(format!(
-                "Plugin '{}' command '{}' skipped because the circuit breaker is open",
-                name, command
-            )));
+            return Err(Self::blocked_invocation_error(
+                health,
+                name,
+                PluginInvocationKind::Command,
+                format!("command '{}'", command),
+            ));
         }
 
-        let start = Instant::now();
-        let result = {
+        let (descriptor, result, elapsed) = {
+            let start = Instant::now();
             let mut plugin = plugin_arc.write().map_err(|_| {
                 PluginError::ExecutionFailed(format!("Failed to acquire plugin lock: {}", name))
             })?;
-            catch_unwind(AssertUnwindSafe(|| {
+            let descriptor = plugin.runtime_descriptor();
+            let result = catch_unwind(AssertUnwindSafe(|| {
                 plugin.plugin_mut().execute_command(command, args)
-            }))
+            }));
+            (descriptor, result, start.elapsed())
         };
         self.record_outcome(
             health,
             None,
             InvocationMetadata {
                 name,
+                descriptor,
                 kind: PluginInvocationKind::Command,
                 timeout: self.policy.command_timeout,
-                elapsed: start.elapsed(),
+                elapsed,
             },
-            result.map_err(|_| {
-                PluginError::ExecutionFailed("Plugin panicked during command execution".to_string())
+            result.map_err(|payload| PluginError::Panic {
+                plugin: name.to_string(),
+                operation: "command execution".to_string(),
+                details: Self::panic_payload_message(payload),
             }),
         )
     }
@@ -1133,34 +1160,39 @@ impl PluginRegistry {
         data: &str,
     ) -> PluginResult<String> {
         if Self::circuit_open(health, name) {
-            return Err(PluginError::CircuitOpen(format!(
-                "Plugin '{}' formatter '{}' skipped because the circuit breaker is open",
-                name, formatter
-            )));
+            return Err(Self::blocked_invocation_error(
+                health,
+                name,
+                PluginInvocationKind::Formatter,
+                format!("formatter '{}'", formatter),
+            ));
         }
 
-        let start = Instant::now();
-        let result = {
+        let (descriptor, result, elapsed) = {
+            let start = Instant::now();
             let plugin = plugin_arc.write().map_err(|_| {
                 PluginError::ExecutionFailed(format!("Failed to acquire plugin lock: {}", name))
             })?;
-            catch_unwind(AssertUnwindSafe(|| {
+            let descriptor = plugin.runtime_descriptor();
+            let result = catch_unwind(AssertUnwindSafe(|| {
                 plugin.plugin().format_output(formatter, data)
-            }))
+            }));
+            (descriptor, result, start.elapsed())
         };
         self.record_outcome(
             health,
             None,
             InvocationMetadata {
                 name,
+                descriptor,
                 kind: PluginInvocationKind::Formatter,
                 timeout: self.policy.formatter_timeout,
-                elapsed: start.elapsed(),
+                elapsed,
             },
-            result.map_err(|_| {
-                PluginError::ExecutionFailed(
-                    "Plugin panicked during formatter execution".to_string(),
-                )
+            result.map_err(|payload| PluginError::Panic {
+                plugin: name.to_string(),
+                operation: "formatter execution".to_string(),
+                details: Self::panic_payload_message(payload),
             }),
         )
     }
@@ -1175,8 +1207,28 @@ impl PluginRegistry {
         let state = health.entry(meta.name.to_string()).or_default();
 
         match result {
-            Err(err) => {
+            Err(err @ PluginError::Panic { .. }) => {
                 state.total_panics += 1;
+                state.total_failures += 1;
+                state.consecutive_failures += 1;
+                state.last_error = Some(err.to_string());
+                let report =
+                    Self::build_incident_report(&meta, PluginIncidentType::Panic, err.to_string());
+                Self::disable_for_session(state, report.clone());
+                logging::log_plugin_incident(&report);
+                if let Some(ctx) = context {
+                    Self::push_telemetry(
+                        ctx,
+                        meta.name,
+                        meta.kind,
+                        PluginInvocationOutcome::Panic,
+                        meta.elapsed.as_millis(),
+                        report.summary_line(),
+                    );
+                }
+                Err(err)
+            }
+            Err(err) => {
                 state.total_failures += 1;
                 state.consecutive_failures += 1;
                 state.last_error = Some(err.to_string());
@@ -1188,7 +1240,7 @@ impl PluginRegistry {
                         ctx,
                         meta.name,
                         meta.kind,
-                        PluginInvocationOutcome::Panic,
+                        PluginInvocationOutcome::Failure,
                         meta.elapsed.as_millis(),
                         err.to_string(),
                     );
@@ -1224,11 +1276,13 @@ impl PluginRegistry {
                     meta.name, meta.kind, meta.timeout, meta.elapsed
                 );
                 state.last_error = Some(message.clone());
-                if state.timeout_count >= self.policy.max_timeouts
-                    || state.consecutive_failures >= self.policy.max_consecutive_failures
-                {
-                    state.circuit_open = true;
-                }
+                let report = Self::build_incident_report(
+                    &meta,
+                    PluginIncidentType::Timeout,
+                    message.clone(),
+                );
+                Self::disable_for_session(state, report.clone());
+                logging::log_plugin_incident(&report);
                 if let Some(ctx) = context {
                     Self::push_telemetry(
                         ctx,
@@ -1236,16 +1290,21 @@ impl PluginRegistry {
                         meta.kind,
                         PluginInvocationOutcome::Timeout,
                         meta.elapsed.as_millis(),
-                        message.clone(),
+                        report.summary_line(),
                     );
                 }
-                Err(PluginError::Timeout(message))
+                Err(PluginError::SessionDisabled {
+                    plugin: meta.name.to_string(),
+                    reason: report.summary_line(),
+                })
             }
             Ok(Ok(value)) => {
                 state.consecutive_failures = 0;
                 state.timeout_count = 0;
-                state.circuit_open = false;
                 state.last_error = None;
+                if !state.session_disabled {
+                    state.circuit_open = false;
+                }
                 if let Some(ctx) = context {
                     Self::push_telemetry(
                         ctx,
@@ -1281,8 +1340,94 @@ impl PluginRegistry {
     fn circuit_open(health: &HashMap<String, PluginHealth>, name: &str) -> bool {
         health
             .get(name)
-            .map(|state| state.circuit_open)
+            .map(|state| state.circuit_open || state.session_disabled)
             .unwrap_or(false)
+    }
+
+    fn disable_for_session(state: &mut PluginHealth, report: PluginIncidentReport) {
+        state.circuit_open = true;
+        state.session_disabled = true;
+        state.last_error = Some(report.summary_line());
+        state.last_incident = Some(report);
+    }
+
+    fn build_incident_report(
+        meta: &InvocationMetadata<'_>,
+        incident: PluginIncidentType,
+        message: String,
+    ) -> PluginIncidentReport {
+        PluginIncidentReport {
+            plugin: meta.descriptor.name.clone(),
+            plugin_version: Some(meta.descriptor.version.clone()),
+            library_path: Some(meta.descriptor.library_path.display().to_string()),
+            invocation_kind: format!("{:?}", meta.kind).to_lowercase(),
+            incident,
+            action_taken: "disabled plugin for the current session".to_string(),
+            core_debugger_status: "core debugger remains available; only the plugin was isolated"
+                .to_string(),
+            message,
+        }
+    }
+
+    fn disabled_message(
+        health: &HashMap<String, PluginHealth>,
+        name: &str,
+        kind: PluginInvocationKind,
+    ) -> Option<String> {
+        let state = health.get(name)?;
+        if let Some(report) = &state.last_incident {
+            return Some(format!(
+                "{} Subsequent {} invocations are skipped for this session.",
+                report.summary_line(),
+                format!("{:?}", kind).to_lowercase()
+            ));
+        }
+        if state.session_disabled {
+            return Some(format!(
+                "Plugin '{}' is disabled for this session and {} invocations are skipped.",
+                name,
+                format!("{:?}", kind).to_lowercase()
+            ));
+        }
+        if state.circuit_open {
+            return Some(format!(
+                "Plugin '{}' {} invocation skipped because the circuit breaker is open.",
+                name,
+                format!("{:?}", kind).to_lowercase()
+            ));
+        }
+        None
+    }
+
+    fn blocked_invocation_error(
+        health: &HashMap<String, PluginHealth>,
+        name: &str,
+        kind: PluginInvocationKind,
+        operation_label: String,
+    ) -> PluginError {
+        let reason = Self::disabled_message(health, name, kind).unwrap_or_else(|| {
+            format!(
+                "Plugin '{}' {} skipped because the plugin is unavailable.",
+                name, operation_label
+            )
+        });
+        match health.get(name) {
+            Some(state) if state.session_disabled => PluginError::SessionDisabled {
+                plugin: name.to_string(),
+                reason,
+            },
+            _ => PluginError::CircuitOpen(reason),
+        }
+    }
+
+    fn panic_payload_message(payload: Box<dyn std::any::Any + Send>) -> String {
+        if let Some(message) = payload.downcast_ref::<&str>() {
+            (*message).to_string()
+        } else if let Some(message) = payload.downcast_ref::<String>() {
+            message.clone()
+        } else {
+            "plugin panicked with a non-string payload".to_string()
+        }
     }
 }
 
@@ -1319,6 +1464,8 @@ pub struct PluginStatistics {
     pub plugin_timeouts: usize,
     pub plugin_panics: usize,
     pub open_circuits: usize,
+    pub session_disabled: usize,
+    pub plugin_incidents: usize,
 }
 
 // ---------------------------------------------------------------------------
@@ -1343,6 +1490,7 @@ mod tests {
         Success,
         Fail,
         Sleep(Duration),
+        Panic(&'static str),
     }
 
     struct TestPlugin {
@@ -1402,6 +1550,7 @@ mod tests {
                     thread::sleep(duration);
                     Ok(())
                 }
+                Behavior::Panic(message) => panic!("{message}"),
             }
         }
 
@@ -1421,6 +1570,7 @@ mod tests {
                     thread::sleep(duration);
                     Ok("slow".to_string())
                 }
+                Behavior::Panic(message) => panic!("{message}"),
             }
         }
 
@@ -1919,7 +2069,6 @@ mod tests {
             "slow",
             vec![
                 Behavior::Sleep(Duration::from_millis(20)),
-                Behavior::Sleep(Duration::from_millis(20)),
                 Behavior::Success,
             ],
             vec![],
@@ -1937,11 +2086,12 @@ mod tests {
 
         registry.dispatch_event(&event, &mut context);
         registry.dispatch_event(&event, &mut context);
-        registry.dispatch_event(&event, &mut context);
 
         let stats = registry.statistics();
-        assert_eq!(stats.plugin_timeouts, 2);
+        assert_eq!(stats.plugin_timeouts, 1);
         assert_eq!(stats.open_circuits, 1);
+        assert_eq!(stats.session_disabled, 1);
+        assert_eq!(stats.plugin_incidents, 1);
         assert!(context
             .plugin_telemetry
             .iter()
@@ -1973,6 +2123,63 @@ mod tests {
         assert!(registry.execute_command("test-command", &[]).is_err());
         let err = registry.execute_command("test-command", &[]).unwrap_err();
         assert!(matches!(err, PluginError::CircuitOpen(_)));
+    }
+
+    #[test]
+    fn panic_incident_disables_plugin_for_current_session() {
+        let plugin = TestPlugin::new(
+            "panicky",
+            vec![Behavior::Panic("boom"), Behavior::Success],
+            vec![],
+        );
+        let registry = registry_with_plugin_and_policy(plugin, PluginExecutionPolicy::default());
+        let mut context = EventContext::new();
+        let event = ExecutionEvent::ExecutionResumed;
+
+        registry.dispatch_event(&event, &mut context);
+        registry.dispatch_event(&event, &mut context);
+
+        let stats = registry.statistics();
+        assert_eq!(stats.plugin_panics, 1);
+        assert_eq!(stats.session_disabled, 1);
+        assert_eq!(stats.plugin_incidents, 1);
+        assert!(context.plugin_telemetry.iter().any(|entry| {
+            entry.outcome == PluginInvocationOutcome::Panic
+                && entry.message.contains("Core debugger status")
+        }));
+        assert!(context.plugin_telemetry.iter().any(|entry| {
+            entry.outcome == PluginInvocationOutcome::SkippedCircuitOpen
+                && entry.message.contains("disabled for this session")
+        }));
+    }
+
+    #[test]
+    fn timeout_incident_returns_session_disabled_error_for_commands() {
+        let plugin = TestPlugin::new(
+            "slow-command",
+            vec![],
+            vec![
+                Behavior::Sleep(Duration::from_millis(20)),
+                Behavior::Success,
+            ],
+        );
+        let registry = registry_with_plugin_and_policy(
+            plugin,
+            PluginExecutionPolicy {
+                command_timeout: Duration::from_millis(5),
+                ..PluginExecutionPolicy::default()
+            },
+        );
+
+        let err = registry.execute_command("test-command", &[]).unwrap_err();
+        assert!(matches!(err, PluginError::SessionDisabled { .. }));
+        let err = registry.execute_command("test-command", &[]).unwrap_err();
+        assert!(matches!(err, PluginError::SessionDisabled { .. }));
+
+        let stats = registry.statistics();
+        assert_eq!(stats.plugin_timeouts, 1);
+        assert_eq!(stats.session_disabled, 1);
+        assert_eq!(stats.plugin_incidents, 1);
     }
 
     #[test]
