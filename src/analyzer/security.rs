@@ -209,7 +209,7 @@ impl SecurityAnalyzer {
                     && supp
                         .location
                         .as_ref()
-                        .map_or(true, |loc| finding.location.contains(loc))
+                        .is_none_or(|loc| finding.location.contains(loc))
                 {
                     finding.suppressed = true;
                     suppressed_count += 1;
@@ -1923,6 +1923,7 @@ mod tests {
             storage_value: None,
             call_depth: Some(depth as u64),
             address: None,
+            invocation_reason: None,
         }
     }
 
@@ -2002,6 +2003,7 @@ mod tests {
             storage_key: None,
             storage_value: None,
             address: None,
+            invocation_reason: None,
         };
 
         let frame = frame_key_for(&event).expect("expected frame key for call-depth-only event");
@@ -2022,6 +2024,7 @@ mod tests {
                 storage_key: None,
                 storage_value: None,
                 address: None,
+                invocation_reason: None,
             },
             DynamicTraceEvent {
                 sequence: 2,
@@ -2033,6 +2036,7 @@ mod tests {
                 storage_key: Some("balance:alice".to_string()),
                 storage_value: Some("0".to_string()),
                 address: None,
+                invocation_reason: None,
             },
         ]);
 
@@ -2054,6 +2058,7 @@ mod tests {
                 storage_key: None,
                 storage_value: None,
                 address: None,
+                invocation_reason: None,
             },
             DynamicTraceEvent {
                 sequence: 2,
@@ -2065,6 +2070,7 @@ mod tests {
                 storage_key: Some("balance:alice".to_string()),
                 storage_value: Some("0".to_string()),
                 address: None,
+                invocation_reason: None,
             },
         ]);
 
@@ -2089,6 +2095,7 @@ mod tests {
                 storage_key: Some(format!("user:{}", i % 4)),
                 storage_value: None,
                 address: None,
+                invocation_reason: None,
             });
         }
 
@@ -2111,6 +2118,7 @@ mod tests {
                 storage_key: Some(format!("bucket:{}", i % 2)),
                 storage_value: Some(format!("{i}")),
                 address: None,
+                invocation_reason: None,
             });
         }
 
@@ -2138,6 +2146,7 @@ mod tests {
                 storage_key: None,
                 storage_value: None,
                 address: None,
+                invocation_reason: None,
             },
             DynamicTraceEvent {
                 sequence: 2,
@@ -2149,6 +2158,7 @@ mod tests {
                 storage_key: None,
                 storage_value: None,
                 address: None,
+                invocation_reason: None,
             },
             DynamicTraceEvent {
                 sequence: 3,
@@ -2160,6 +2170,7 @@ mod tests {
                 storage_key: Some("balance:alice".to_string()),
                 storage_value: Some("0".to_string()),
                 address: None,
+                invocation_reason: None,
             },
         ]);
 
@@ -2187,6 +2198,7 @@ mod tests {
                 storage_key: None,
                 storage_value: None,
                 address: None,
+                invocation_reason: None,
             },
             DynamicTraceEvent {
                 sequence: 2,
@@ -2198,6 +2210,7 @@ mod tests {
                 storage_key: Some("settled:alice".to_string()),
                 storage_value: Some("true".to_string()),
                 address: None,
+                invocation_reason: None,
             },
             DynamicTraceEvent {
                 sequence: 3,
@@ -2209,6 +2222,7 @@ mod tests {
                 storage_key: None,
                 storage_value: None,
                 address: None,
+                invocation_reason: None,
             },
             DynamicTraceEvent {
                 sequence: 4,
@@ -2220,6 +2234,7 @@ mod tests {
                 storage_key: Some("audit:last_settle".to_string()),
                 storage_value: Some("1".to_string()),
                 address: None,
+                invocation_reason: None,
             },
         ]);
 
@@ -2239,6 +2254,7 @@ mod tests {
                 storage_key: None,
                 storage_value: None,
                 address: None,
+                invocation_reason: None,
             },
             DynamicTraceEvent {
                 sequence: 2,
@@ -2250,6 +2266,7 @@ mod tests {
                 storage_key: None,
                 storage_value: None,
                 address: None,
+                invocation_reason: None,
             },
             DynamicTraceEvent {
                 sequence: 3,
@@ -2261,6 +2278,7 @@ mod tests {
                 storage_key: Some("receipt:1".to_string()),
                 storage_value: Some("ok".to_string()),
                 address: None,
+                invocation_reason: None,
             },
         ]);
 
@@ -2358,6 +2376,7 @@ mod tests {
                 storage_key: Some("key1".to_string()),
                 storage_value: Some("value1".to_string()),
                 address: None,
+                invocation_reason: None,
             },
             DynamicTraceEvent {
                 sequence: 1,
@@ -2369,6 +2388,7 @@ mod tests {
                 storage_key: None,
                 storage_value: None,
                 address: None,
+                invocation_reason: None,
             },
         ];
 
@@ -2393,6 +2413,7 @@ mod tests {
                 storage_key: None,
                 storage_value: None,
                 address: Some("G123...".to_string()),
+                invocation_reason: None,
             },
             DynamicTraceEvent {
                 sequence: 1,
@@ -2404,6 +2425,7 @@ mod tests {
                 storage_key: Some("key1:G123...".to_string()),
                 storage_value: Some("value1".to_string()),
                 address: None,
+                invocation_reason: None,
             },
         ];
 
@@ -2426,6 +2448,7 @@ mod tests {
                 storage_key: Some("key1".to_string()),
                 storage_value: Some("value1".to_string()),
                 address: None,
+                invocation_reason: None,
             },
             DynamicTraceEvent {
                 sequence: 1,
@@ -2437,6 +2460,7 @@ mod tests {
                 storage_key: Some("key2".to_string()),
                 storage_value: Some("value2".to_string()),
                 address: None,
+                invocation_reason: None,
             },
             DynamicTraceEvent {
                 sequence: 2,
@@ -2448,6 +2472,7 @@ mod tests {
                 storage_key: None,
                 storage_value: None,
                 address: None,
+                invocation_reason: None,
             },
         ];
 
@@ -2472,6 +2497,7 @@ mod tests {
                 storage_key: Some("key1".to_string()),
                 storage_value: Some("value1".to_string()),
                 address: None,
+                invocation_reason: None,
             },
             DynamicTraceEvent {
                 sequence: 1,
@@ -2483,6 +2509,7 @@ mod tests {
                 storage_key: Some("key2".to_string()),
                 storage_value: Some("value2".to_string()),
                 address: None,
+                invocation_reason: None,
             },
         ];
 
@@ -2510,6 +2537,7 @@ mod tests {
                 storage_key: None,
                 storage_value: None,
                 address: None,
+                invocation_reason: None,
             },
             DynamicTraceEvent {
                 sequence: 1,
@@ -2521,6 +2549,7 @@ mod tests {
                 storage_key: Some("key1".to_string()),
                 storage_value: Some("value1".to_string()),
                 address: None,
+                invocation_reason: None,
             },
         ];
 
@@ -2549,6 +2578,7 @@ mod tests {
                 storage_key: None,
                 storage_value: None,
                 caller: None,
+                invocation_reason: None,
             },
             DynamicTraceEvent {
                 sequence: 1,
@@ -2562,6 +2592,7 @@ mod tests {
                 call_depth: Some(0),
                 address: None,
                 caller: None,
+                invocation_reason: None,
             },
         ];
 

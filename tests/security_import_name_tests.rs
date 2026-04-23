@@ -132,6 +132,7 @@ fn reentrancy_detection_handles_optional_function_metadata_with_depth() {
             storage_key: None,
             storage_value: None,
             address: None,
+            invocation_reason: None,
         },
         DynamicTraceEvent {
             sequence: 2,
@@ -143,11 +144,18 @@ fn reentrancy_detection_handles_optional_function_metadata_with_depth() {
             storage_key: Some("balance:alice".to_string()),
             storage_value: Some("0".to_string()),
             address: None,
+            invocation_reason: None,
         },
     ];
 
     let report = analyzer
-        .analyze(&wasm, None, Some(&trace), &AnalyzerFilter::default(), "test_contract.wasm")
+        .analyze(
+            &wasm,
+            None,
+            Some(&trace),
+            &AnalyzerFilter::default(),
+            "test_contract.wasm",
+        )
         .expect("analysis failed");
 
     assert!(report

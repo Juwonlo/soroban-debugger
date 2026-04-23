@@ -13,7 +13,13 @@ fn main() {
 
     let analyzer = SecurityAnalyzer::new();
     let filter = AnalyzerFilter::default();
-    match analyzer.analyze(&wasm_with_storage_loop, None, None, &filter) {
+    match analyzer.analyze(
+        &wasm_with_storage_loop,
+        None,
+        None,
+        &filter,
+        "test_loop.wasm",
+    ) {
         Ok(report) => {
             println!(
                 "Analysis complete. Found {} security issues.",
@@ -103,7 +109,7 @@ mod tests {
         let analyzer = SecurityAnalyzer::new();
         let filter = AnalyzerFilter::default();
         let report = analyzer
-            .analyze(&wasm, None, None, &filter)
+            .analyze(&wasm, None, None, &filter, "test_loop.wasm")
             .expect("Analysis should succeed");
 
         // Should find the unbounded iteration issue

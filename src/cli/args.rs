@@ -1144,13 +1144,23 @@ pub struct RemoteArgs {
     /// the connection is already established.
     ///
     /// Default: 10 000 ms (10 seconds).
-    #[arg(long, value_name = "MS", default_value = "10000", env = "SOROBAN_DEBUG_CONNECT_TIMEOUT_MS")]
+    #[arg(
+        long,
+        value_name = "MS",
+        default_value = "10000",
+        env = "SOROBAN_DEBUG_CONNECT_TIMEOUT_MS"
+    )]
     pub connect_timeout_ms: u64,
 
     /// Per-request timeout in milliseconds for regular operations (execute, storage, inspect).
     ///
     /// Default: 30 000 ms (30 seconds).
-    #[arg(long, value_name = "MS", default_value = "30000", env = "SOROBAN_DEBUG_REQUEST_TIMEOUT_MS")]
+    #[arg(
+        long,
+        value_name = "MS",
+        default_value = "30000",
+        env = "SOROBAN_DEBUG_REQUEST_TIMEOUT_MS"
+    )]
     pub timeout_ms: u64,
 
     /// Per-request timeout in milliseconds specifically for Inspect calls.
