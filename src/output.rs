@@ -423,11 +423,19 @@ mod tests {
 }
 
 /// Formats a resource timeline as a markdown table.
-pub fn format_resource_timeline(timeline: &[crate::inspector::budget::ResourceCheckpoint]) -> String {
+pub fn format_resource_timeline(
+    timeline: &[crate::inspector::budget::ResourceCheckpoint],
+) -> String {
     use std::fmt::Write;
     let mut out = String::new();
-    let _ = writeln!(out, "| Time (ms) | CPU Instructions | Memory Bytes | Location |");
-    let _ = writeln!(out, "|-----------|------------------|--------------|----------|");
+    let _ = writeln!(
+        out,
+        "| Time (ms) | CPU Instructions | Memory Bytes | Location |"
+    );
+    let _ = writeln!(
+        out,
+        "|-----------|------------------|--------------|----------|"
+    );
     for point in timeline {
         let _ = writeln!(
             out,

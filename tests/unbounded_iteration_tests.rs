@@ -355,6 +355,7 @@ fn dynamic_analysis_detects_high_storage_pressure() {
             storage_value: None,
             call_depth: Some(0),
             address: None,
+            invocation_reason: None,
         });
     }
 
@@ -401,6 +402,7 @@ fn dynamic_analysis_ignores_reasonable_storage_access() {
             storage_value: None,
             call_depth: Some(0),
             address: None,
+            invocation_reason: None,
         });
     }
 
@@ -480,6 +482,7 @@ fn dynamic_analysis_detects_high_storage_write_pressure() {
             storage_value: Some(format!("value_{}", i)),
             call_depth: None,
             address: None,
+            invocation_reason: None,
         });
     }
 
@@ -533,6 +536,7 @@ fn dynamic_analysis_ignores_reasonable_storage_write_access() {
             storage_value: Some(format!("value_{}", i)),
             call_depth: None,
             address: None,
+            invocation_reason: None,
         });
     }
 
