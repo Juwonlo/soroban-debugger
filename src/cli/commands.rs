@@ -9,8 +9,13 @@ use crate::cli::args::{
     OutputFormat, ProfileArgs, RemoteAction, RemoteArgs, ReplArgs, ReplayArgs, RunArgs,
     ScenarioArgs, ServerArgs, SymbolicArgs, SymbolicProfile, TuiArgs, UpgradeCheckArgs, Verbosity,
 };
+use crate::cli::output::write_json_pretty_file;
 use crate::debugger::engine::DebuggerEngine;
 use crate::debugger::instruction_pointer::StepMode;
+use crate::debugger::timeline::{
+    TimelineDeltas, TimelineExport, TimelinePausePoint, TimelineRunInfo, TimelineStorageDelta,
+    TimelineWarning, TIMELINE_EXPORT_SCHEMA_VERSION,
+};
 use crate::history::{HistoryManager, RunHistory};
 use crate::inspector::events::{ContractEvent, EventInspector};
 use crate::logging;
@@ -998,6 +1003,86 @@ pub fn run(args: RunArgs, verbosity: Verbosity) -> Result<()> {
                     ));
                 }
             }
+        }
+    }
+
+    if let Some(timeline_path) = &args.timeline_output {
+        print_info(format!(
+            "\nExporting timeline narrative to: {:?}",
+            timeline_path
+        ));
+
+        let stack_summary = engine
+            .state()
+            .lock()
+            .ok()
+            .map(|state| state.call_stack().get_stack().to_vec())
+            .unwrap_or_default();
+
+        let mut warnings = Vec::new();
+        if !storage_diff.triggered_alerts.is_empty() {
+            warnings.push(TimelineWarning {
+                kind: "storage_alert".to_string(),
+                message: format!(
+                    "Triggered storage alert(s): {}",
+                    storage_diff.triggered_alerts.join(", ")
+                ),
+            });
+        }
+
+        let events_count = json_events
+            .as_ref()
+            .map(|ev| ev.len())
+            .or_else(|| engine.executor().get_events().ok().map(|ev| ev.len()));
+
+        let storage_delta = if storage_diff.is_empty() {
+            None
+        } else {
+            Some(TimelineStorageDelta::from_storage_diff(&storage_diff, 200))
+        };
+
+        let mut pauses = Vec::new();
+        let hit_entry_breakpoint = args.breakpoint.iter().any(|bp| bp == function);
+        if engine.is_paused() && hit_entry_breakpoint {
+            pauses.push(TimelinePausePoint {
+                index: 0,
+                reason: "breakpoint".to_string(),
+                location: None,
+                call_stack: stack_summary.clone(),
+            });
+        }
+
+        let export = TimelineExport {
+            schema_version: TIMELINE_EXPORT_SCHEMA_VERSION,
+            created_at: chrono::Utc::now().to_rfc3339(),
+            run: TimelineRunInfo {
+                contract_path: contract.to_string_lossy().to_string(),
+                wasm_sha256: Some(wasm_hash.clone()),
+                function: function.to_string(),
+                args_json: args.args.clone(),
+                result: Some(result.clone()),
+                error: None,
+                budget: Some(budget.clone()),
+                events_count,
+            },
+            pauses,
+            stack_summary,
+            deltas: TimelineDeltas {
+                storage: storage_delta,
+            },
+            warnings,
+        };
+
+        if let Err(e) = write_json_pretty_file(timeline_path, &export) {
+            print_warning(format!(
+                "Failed to write timeline narrative to {:?}: {}",
+                timeline_path, e
+            ));
+        } else {
+            print_success(format!(
+                "Successfully exported timeline narrative to {:?}",
+                timeline_path
+            ));
         }
     }
 

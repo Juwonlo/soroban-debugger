@@ -404,6 +404,11 @@ pub struct RunArgs {
     /// Export execution trace to JSON file and emit a replay manifest sidecar
     #[arg(long)]
     pub trace_output: Option<PathBuf>,
+
+    /// Export a compact timeline narrative (pause points + key deltas) to JSON file
+    #[arg(long, value_name = "FILE")]
+    pub timeline_output: Option<PathBuf>,
+
     /// Path to file where execution results should be saved
     #[arg(long, value_name = "FILE")]
     pub save_output: Option<PathBuf>,
