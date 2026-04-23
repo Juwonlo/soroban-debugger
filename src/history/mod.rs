@@ -7,6 +7,68 @@ use std::io::{BufReader, BufWriter, Write};
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime};
 
+/// A record of a single session reconnection event.
+///
+/// Used by the server to track when clients reconnect to preserved sessions,
+/// enabling diagnostics and operator visibility into connection stability.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReconnectionEvent {
+    /// ISO-8601 timestamp of the reconnection.
+    pub timestamp: String,
+    /// The session identifier that was reconnected.
+    pub session_id: String,
+    /// Duration (in milliseconds) between the disconnect and the reconnection.
+    pub disconnect_duration_ms: u64,
+    /// Whether the session was still in a paused/breakpoint state at reconnect time.
+    pub was_paused: bool,
+}
+
+/// Lightweight log for tracking reconnection events within a debug session.
+///
+/// This is intentionally in-memory only. The events can be serialized to disk
+/// using [`write_json_atomically`] if persistence is required.
+#[derive(Debug, Clone, Default)]
+pub struct ReconnectionLog {
+    events: Vec<ReconnectionEvent>,
+}
+
+impl ReconnectionLog {
+    /// Create a new, empty reconnection log.
+    pub fn new() -> Self {
+        Self { events: Vec::new() }
+    }
+
+    /// Record a new reconnection event.
+    pub fn record(
+        &mut self,
+        session_id: &str,
+        disconnect_duration: Duration,
+        was_paused: bool,
+    ) {
+        self.events.push(ReconnectionEvent {
+            timestamp: Utc::now().to_rfc3339(),
+            session_id: session_id.to_string(),
+            disconnect_duration_ms: disconnect_duration.as_millis() as u64,
+            was_paused,
+        });
+    }
+
+    /// Return the number of reconnection events recorded.
+    pub fn count(&self) -> usize {
+        self.events.len()
+    }
+
+    /// Return a slice of all recorded events.
+    pub fn events(&self) -> &[ReconnectionEvent] {
+        &self.events
+    }
+
+    /// Persist the reconnection log to a JSON file using atomic writes.
+    pub fn save_to_file(&self, path: &std::path::Path) -> Result<()> {
+        write_json_atomically(path, &self.events)
+    }
+}
+
 pub fn write_json_atomically<T: Serialize>(path: &std::path::Path, value: &T) -> Result<()> {
     if let Some(parent) = path.parent() {
         if !parent.as_os_str().is_empty() && !parent.exists() {

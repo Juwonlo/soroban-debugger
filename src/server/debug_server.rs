@@ -1,4 +1,5 @@
 use crate::debugger::breakpoint::{BreakpointManager, BreakpointSpec};
+use crate::history::ReconnectionLog;
 use crate::debugger::engine::{DebuggerEngine, StepOverResult};
 use crate::inspector::budget::BudgetInspector;
 use crate::server::protocol::{
@@ -20,6 +21,11 @@ use tokio::sync::Notify;
 use tokio_rustls::rustls::{Certificate, PrivateKey, ServerConfig};
 use tokio_rustls::TlsAcceptor;
 use tracing::{error, info, warn};
+use uuid::Uuid;
+
+/// Default grace period (in seconds) that the server will hold a session
+/// after the client connection drops before discarding the debugging context.
+pub const SESSION_GRACE_PERIOD_SECS: u64 = 300;
 
 pub struct DebugServer {
     host: String,
@@ -31,6 +37,13 @@ pub struct DebugServer {
     contract_wasm: Option<Vec<u8>>,
     repeat_count: Option<u32>,
     storage_filter: Vec<String>,
+    /// Opaque session identifier issued during the initial handshake.
+    /// Clients present this value in a `Reconnect` request to re-attach.
+    session_id: String,
+    /// Instant when the last client disconnected (used for grace-period expiry).
+    last_disconnect: Option<std::time::Instant>,
+    /// Log of successful reconnection events in the current session.
+    reconnection_log: ReconnectionLog,
 }
 
 struct PendingExecution {
@@ -67,6 +80,9 @@ impl DebugServer {
             contract_wasm: None,
             repeat_count,
             storage_filter,
+            session_id: Uuid::new_v4().to_string(),
+            last_disconnect: None,
+            reconnection_log: ReconnectionLog::new(),
         })
     }
 
@@ -128,6 +144,22 @@ impl DebugServer {
     where
         S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
     {
+        // Check if a previously "parked" session has expired before we do anything else.
+        if let Some(instant) = self.last_disconnect {
+            if instant.elapsed().as_secs() > SESSION_GRACE_PERIOD_SECS {
+                info!(
+                    "Previous session {} expired after {} seconds. Resetting session state.",
+                    self.session_id, SESSION_GRACE_PERIOD_SECS
+                );
+                self.engine = None;
+                self.pending_execution = None;
+                self.contract_wasm = None;
+                self.last_disconnect = None;
+                // Generate a new session id for this fresh connection
+                self.session_id = Uuid::new_v4().to_string();
+            }
+        }
+
         let mut authenticated = self.token.is_none();
         let mut handshake_done = false;
         let (reader, writer) = tokio::io::split(stream);
@@ -310,6 +342,7 @@ impl DebugServer {
                                 selected_version,
                                 heartbeat_interval_ms: *heartbeat_interval_ms,
                                 idle_timeout_ms: idle_timeout,
+                                session_id: Some(self.session_id.clone()),
                             },
                         );
                         send_msg(response)?;
@@ -399,6 +432,77 @@ impl DebugServer {
                     message.id,
                     DebugResponse::Error {
                         message: "Authentication required".to_string(),
+                    },
+                );
+                send_msg(response)?;
+                continue;
+            }
+
+            // ── Handle Reconnect before normal request dispatch ──────────
+            if let DebugRequest::Reconnect { session_id: ref client_session_id } = request {
+                if *client_session_id != self.session_id {
+                    let response = DebugMessage::response(
+                        message.id,
+                        DebugResponse::SessionExpired {
+                            message: "Session ID does not match. The session may have been \
+                                      replaced by a newer connection or the server was restarted."
+                                .to_string(),
+                        },
+                    );
+                    send_msg(response)?;
+                    continue;
+                }
+
+                if self.engine.is_none() {
+                    let response = DebugMessage::response(
+                        message.id,
+                        DebugResponse::SessionExpired {
+                            message: "No active session found. The session may have been \
+                                      cleared due to a manual disconnect or server restart."
+                                .to_string(),
+                        },
+                    );
+                    send_msg(response)?;
+                    continue;
+                }
+
+                if let Some(instant) = self.last_disconnect.take() {
+                    self.reconnection_log.record(
+                        &self.session_id,
+                        instant.elapsed(),
+                        self.engine.as_ref().map_or(false, |e| e.is_paused()),
+                    );
+                }
+                info!("Client reconnected to session {}", self.session_id);
+
+                let (paused, current_function, step_count) = self
+                    .engine
+                    .as_ref()
+                    .and_then(|engine| {
+                        engine.state().lock().ok().map(|state| {
+                            (
+                                engine.is_paused(),
+                                state.current_function().map(|s| s.to_string()),
+                                state.step_count() as u64,
+                            )
+                        })
+                    })
+                    .unwrap_or((false, None, 0));
+
+                let breakpoints = self
+                    .engine
+                    .as_ref()
+                    .map(|e| e.breakpoints().list())
+                    .unwrap_or_default();
+
+                let response = DebugMessage::response(
+                    message.id,
+                    DebugResponse::ReconnectAck {
+                        session_id: self.session_id.clone(),
+                        paused,
+                        current_function,
+                        breakpoints,
+                        step_count,
                     },
                 );
                 send_msg(response)?;
@@ -1207,6 +1311,12 @@ impl DebugServer {
                 DebugRequest::Ping => DebugResponse::Pong,
                 DebugRequest::Disconnect => DebugResponse::Disconnected,
                 DebugRequest::Cancel => DebugResponse::CancelAck,
+                DebugRequest::Reconnect { .. } => {
+                    // Already handled above; this branch is unreachable
+                    DebugResponse::Error {
+                        message: "Reconnect handled out of band".to_string(),
+                    }
+                }
                 DebugRequest::Unknown => DebugResponse::Error {
                     message: "Unknown request type. Try upgrading the server.".to_string(),
                 },
@@ -1216,8 +1326,27 @@ impl DebugServer {
             send_msg(response)?;
 
             if is_disconnect {
+                // Explicit disconnect: client intentionally ended the session.
+                // Clear the engine so the session cannot be reconnected.
+                info!("Client explicitly disconnected, clearing session state");
+                self.engine = None;
+                self.pending_execution = None;
+                self.contract_wasm = None;
+                self.last_disconnect = None;
+                // Generate a new session id for the next session
+                self.session_id = Uuid::new_v4().to_string();
                 break;
             }
+        }
+
+        // If we reach here via a broken connection (not an explicit Disconnect),
+        // preserve the engine for reconnection and record the disconnect time.
+        if self.engine.is_some() {
+            info!(
+                "Client connection lost; preserving session {} for up to {} seconds",
+                self.session_id, SESSION_GRACE_PERIOD_SECS
+            );
+            self.last_disconnect = Some(std::time::Instant::now());
         }
 
         Ok(())
