@@ -12,6 +12,7 @@ A Visual Studio Code extension that integrates the Soroban smart contract debugg
 - 🧵 **Thread Support**: Basic thread management for debugging sessions
 - 📝 **Detailed Logging**: Optional trace logging for debugging adapter interactions
 - ⚡ **Real-time Debugging**: Step through contract execution with next, step in, and step out
+- 📋 **Session Summary**: Get a concise recap of budget totals, events, storage writes, and final status when a session ends
 
 ## Requirements
 
@@ -357,6 +358,16 @@ For troubleshooting the Debug Adapter Protocol communication:
 ```
 
 Trace output appears in the Debug Console (Ctrl+Shift+U).
+
+### Session Summary
+
+When a debug session concludes, the extension presents a concise final summary. This helps you quickly recap the execution without manually combing through logs. The summary includes:
+
+- **Final status** (Success, Failure, Panic)
+- **Budget totals** (CPU instructions and Memory consumed)
+- **Event count**
+- **Storage writes**
+- **Exported artifact paths** (e.g., traces, storage snapshots)
 
 ### Diagnostic Logging
 
