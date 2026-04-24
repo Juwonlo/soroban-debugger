@@ -659,8 +659,6 @@ export class SorobanDebugSession extends DebugSession {
       if (result.paused) {
         await this.refreshState();
         this.state.isPaused = true;
-        const stopReason = this.mapPauseReason(result.pauseReason) ?? 'breakpoint';
-        this.sendEvent(new StoppedEvent(stopReason, this.threadId));
         await this.updateEvents();
         this.sendEvent(new StoppedEvent('breakpoint', this.threadId));
         return;
@@ -809,8 +807,6 @@ export class SorobanDebugSession extends DebugSession {
 
     if (result.paused) {
       this.state.isPaused = true;
-      const stopReason = this.mapPauseReason(result.pauseReason) ?? reason;
-      this.sendEvent(new StoppedEvent(stopReason, this.threadId));
       await this.updateEvents();
       this.sendEvent(new StoppedEvent(reason, this.threadId));
       return;

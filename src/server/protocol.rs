@@ -423,18 +423,9 @@ pub enum DebugResponse {
     /// Cancel acknowledged
     CancelAck,
 
-    /// Reconnection to an existing session was successful.
-    ReconnectAck {
-        session_id: String,
-        paused: bool,
-        current_function: Option<String>,
-        breakpoints: Vec<String>,
-        step_count: u64,
-    },
-
-    /// The requested session has expired or does not exist.
-    SessionExpired {
-        message: String,
+    /// List of events
+    EventsList {
+        events: Vec<crate::server::protocol::DynamicTraceEvent>,
     },
 
     /// Catch-all for forward compatibility

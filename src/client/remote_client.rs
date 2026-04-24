@@ -359,14 +359,9 @@ impl RemoteClient {
 
         match response {
             DebugResponse::HandshakeAck {
-                selected_version,
-                session_id,
-                ..
+                selected_version, ..
             } => {
-                // Store the session_id for reconnection support
-                if session_id.is_some() {
-                    self.session_id = session_id;
-                }
+                self.selected_protocol_version = Some(selected_version);
                 Ok(selected_version)
             }
             DebugResponse::IncompatibleProtocol { message, .. } => {

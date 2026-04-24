@@ -1,6 +1,5 @@
 use crate::inspector::budget::BudgetInfo;
 use crate::inspector::stack::CallFrame;
-use crate::debugger::state::PauseReason;
 use crate::debugger::source_map::SourceLocation;
 use crate::inspector::storage::StorageDiff;
 use serde::{Deserialize, Serialize};
