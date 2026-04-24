@@ -11,6 +11,7 @@
 
 use crate::debugger::engine::DebuggerEngine;
 use crate::inspector::budget::BudgetInfo;
+use crate::inspector::storage::{StorageInspector, StorageQuery};
 use crate::inspector::stack::CallFrame;
 use crate::{DebuggerError, Result};
 use crossterm::{
@@ -121,6 +122,11 @@ pub struct DashboardApp {
     storage_entries: Vec<(String, String)>,
     storage_state: ListState,
     storage_scroll_state: ScrollbarState,
+    storage_filter: String,
+    storage_selected: usize,
+    storage_page_size: usize,
+    storage_input_mode: Option<StorageInputMode>,
+    storage_input_value: String,
 
     // Budget pane
     budget_info: BudgetInfo,
@@ -167,6 +173,12 @@ enum StatusKind {
     Error,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum StorageInputMode {
+    Filter,
+    Jump,
+}
+
 impl DashboardApp {
     pub fn new(engine: DebuggerEngine, function_name: String) -> Self {
         let pending_execution = if engine.is_paused() {
@@ -201,6 +213,11 @@ impl DashboardApp {
                 state
             },
             storage_scroll_state: ScrollbarState::default().content_length(0),
+            storage_filter: String::new(),
+            storage_selected: 0,
+            storage_page_size: 1,
+            storage_input_mode: None,
+            storage_input_value: String::new(),
             budget_info: BudgetInfo {
                 cpu_instructions: 0,
                 cpu_limit: 100_000_000,
@@ -308,11 +325,7 @@ impl DashboardApp {
         // ── Storage ────────────────────────────────────────────────────
         let new_entries: Vec<(String, String)> = match self.engine.executor().get_storage_snapshot()
         {
-            Ok(snapshot) => {
-                let mut v: Vec<(String, String)> = snapshot.into_iter().collect();
-                v.sort_by(|a, b| a.0.cmp(&b.0));
-                v
-            }
+            Ok(snapshot) => StorageInspector::sorted_entries_from_map(&snapshot),
             Err(e) => {
                 self.push_log(LogLevel::Error, format!("Storage snapshot failed: {}", e));
                 Vec::new()
@@ -326,8 +339,8 @@ impl DashboardApp {
             );
         }
         self.storage_entries = new_entries;
-        let slen = self.storage_entries.len();
-        self.storage_scroll_state = self.storage_scroll_state.content_length(slen);
+        self.clamp_storage_selection();
+        self.sync_storage_scroll_state();
 
         self.rebuild_diagnostics();
         self.last_refresh = Instant::now();
@@ -460,14 +473,7 @@ impl DashboardApp {
                 self.call_stack_state.select(Some((sel + 1).min(len - 1)));
             }
             ActivePane::Storage => {
-                let len = self.storage_entries.len();
-                if len == 0 {
-                    return;
-                }
-                let sel = self.storage_state.selected().unwrap_or(0);
-                let new_sel = (sel + 1).min(len - 1);
-                self.storage_state.select(Some(new_sel));
-                self.storage_scroll_state = self.storage_scroll_state.position(new_sel);
+                self.move_storage_selection(1);
             }
             ActivePane::Log => {
                 let len = self.log_entries.len();
@@ -496,10 +502,7 @@ impl DashboardApp {
                 self.call_stack_state.select(Some(sel.saturating_sub(1)));
             }
             ActivePane::Storage => {
-                let sel = self.storage_state.selected().unwrap_or(0);
-                let new_sel = sel.saturating_sub(1);
-                self.storage_state.select(Some(new_sel));
-                self.storage_scroll_state = self.storage_scroll_state.position(new_sel);
+                self.move_storage_selection(-1);
             }
             ActivePane::Log => {
                 self.log_scroll = self.log_scroll.saturating_sub(1);
@@ -612,6 +615,10 @@ fn run_app<B: ratatui::backend::Backend>(
                     return Ok(());
                 }
 
+                if app.handle_storage_input_key(key) {
+                    continue;
+                }
+
                 match key.code {
                     // ── Quit ─────────────────────────────────────
                     KeyCode::Char('q') | KeyCode::Char('Q') => return Ok(()),
@@ -644,6 +651,41 @@ fn run_app<B: ratatui::backend::Backend>(
                     }
 
                     // ── Debugger actions ──────────────────────────
+                    KeyCode::PageDown => {
+                        if app.active_pane == ActivePane::Storage {
+                            app.move_storage_page(1);
+                        }
+                    }
+                    KeyCode::PageUp => {
+                        if app.active_pane == ActivePane::Storage {
+                            app.move_storage_page(-1);
+                        }
+                    }
+                    KeyCode::Home => {
+                        if app.active_pane == ActivePane::Storage {
+                            app.move_storage_to_boundary(false);
+                        }
+                    }
+                    KeyCode::End => {
+                        if app.active_pane == ActivePane::Storage {
+                            app.move_storage_to_boundary(true);
+                        }
+                    }
+                    KeyCode::Char('/') => {
+                        if app.active_pane == ActivePane::Storage {
+                            app.open_storage_input(StorageInputMode::Filter);
+                        }
+                    }
+                    KeyCode::Char('g') => {
+                        if app.active_pane == ActivePane::Storage {
+                            app.open_storage_input(StorageInputMode::Jump);
+                        }
+                    }
+                    KeyCode::Char('x') | KeyCode::Esc => {
+                        if app.active_pane == ActivePane::Storage {
+                            app.clear_storage_filter();
+                        }
+                    }
                     KeyCode::Char('s') | KeyCode::Char('S') => {
                         app.do_step();
                     }
@@ -988,11 +1030,56 @@ fn render_call_stack(f: &mut Frame, app: &mut DashboardApp, area: Rect) {
 fn render_storage(f: &mut Frame, app: &mut DashboardApp, area: Rect) {
     let is_active = app.active_pane == ActivePane::Storage;
     let count = app.storage_entries.len();
-    let title = format!("  Storage  ({} entries)", count);
+    let matched = app.storage_filtered_len();
+    let title = if app.storage_filter.trim().is_empty() {
+        format!("  Storage  ({} entries)", count)
+    } else {
+        format!("  Storage  ({} / {} entries)", matched, count)
+    };
     let block = pane_block(&title, "3", is_active);
 
     let inner = block.inner(area);
     f.render_widget(block, area);
+
+    if inner.height == 0 || inner.width == 0 {
+        return;
+    }
+
+    let header_rows = if inner.height > 2 { 2 } else { 1 };
+    let sections = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(header_rows), Constraint::Min(0)])
+        .split(inner);
+    let list_region = sections[1];
+
+    app.set_storage_page_size(list_region.height.max(1) as usize);
+    let page = app.storage_page();
+    let summary = if page.filtered_entries == 0 {
+        "  No matching storage entries".to_string()
+    } else {
+        format!(
+            "  Page {}/{}  showing {}-{} of {}",
+            page.page + 1,
+            page.total_pages,
+            page.page_start + 1,
+            page.page_start + page.entries.len(),
+            page.filtered_entries
+        )
+    };
+    let filter_line = if app.storage_filter.trim().is_empty() {
+        "  /=filter  g=jump  PgUp/PgDn=page  Home/End=edges  x=clear".to_string()
+    } else {
+        format!(
+            "  filter={}  /=edit  g=jump  PgUp/PgDn=page  x=clear",
+            truncate(&app.storage_filter, sections[0].width.saturating_sub(10) as usize)
+        )
+    };
+    let meta = Paragraph::new(vec![
+        Line::from(Span::styled(summary, Style::default().fg(COLOR_TEXT_DIM))),
+        Line::from(Span::styled(filter_line, Style::default().fg(COLOR_TEXT_DIM))),
+    ])
+    .style(Style::default().bg(COLOR_SURFACE));
+    f.render_widget(meta, sections[0]);
 
     if app.storage_entries.is_empty() {
         let msg = Paragraph::new(Line::from(vec![Span::styled(
@@ -1001,21 +1088,39 @@ fn render_storage(f: &mut Frame, app: &mut DashboardApp, area: Rect) {
         )]))
         .style(Style::default().bg(COLOR_SURFACE))
         .wrap(Wrap { trim: false });
-        f.render_widget(msg, inner);
+        f.render_widget(msg, list_region);
         return;
     }
 
-    let items: Vec<ListItem> = app
-        .storage_entries
+    if page.entries.is_empty() {
+        let msg = Paragraph::new(Line::from(vec![Span::styled(
+            "  (no storage entries match the current filter)",
+            Style::default().fg(COLOR_TEXT_DIM),
+        )]))
+        .style(Style::default().bg(COLOR_SURFACE))
+        .wrap(Wrap { trim: false });
+        f.render_widget(msg, list_region);
+        if let Some(mode) = app.storage_input_mode {
+            render_storage_prompt(f, area, mode, &app.storage_input_value);
+        }
+        return;
+    }
+
+    let items: Vec<ListItem> = page
+        .entries
         .iter()
-        .map(|(k, v)| {
+        .enumerate()
+        .map(|(offset, (k, v))| {
             // Truncate long keys/values to fit
-            let max_key = (inner.width as usize).saturating_sub(6).min(25);
-            let max_val = (inner.width as usize).saturating_sub(max_key + 6);
+            let max_key = (list_region.width as usize).saturating_sub(14).min(32);
+            let max_val = (list_region.width as usize).saturating_sub(max_key + 12);
             let key_display = truncate(k, max_key);
             let val_display = truncate(v, max_val);
             ListItem::new(Line::from(vec![
-                Span::styled(" ", Style::default()),
+                Span::styled(
+                    format!("{:>4} ", page.page_start + offset + 1),
+                    Style::default().fg(COLOR_TEXT_DIM),
+                ),
                 Span::styled(
                     key_display,
                     Style::default().fg(COLOR_CYAN).add_modifier(Modifier::BOLD),
@@ -1036,14 +1141,14 @@ fn render_storage(f: &mut Frame, app: &mut DashboardApp, area: Rect) {
 
     // Scrollbar area
     let scroll_area = Rect {
-        x: inner.x + inner.width.saturating_sub(1),
-        y: inner.y,
+        x: list_region.x + list_region.width.saturating_sub(1),
+        y: list_region.y,
         width: 1,
-        height: inner.height,
+        height: list_region.height,
     };
     let list_area = Rect {
-        width: inner.width.saturating_sub(1),
-        ..inner
+        width: list_region.width.saturating_sub(1),
+        ..list_region
     };
 
     f.render_stateful_widget(list, list_area, &mut app.storage_state);
@@ -1055,9 +1160,53 @@ fn render_storage(f: &mut Frame, app: &mut DashboardApp, area: Rect) {
         scroll_area,
         &mut app.storage_scroll_state,
     );
+
+    if let Some(mode) = app.storage_input_mode {
+        render_storage_prompt(f, area, mode, &app.storage_input_value);
+    }
 }
 
 // ─── Budget pane ──────────────────────────────────────────────────────────
+fn render_storage_prompt(f: &mut Frame, area: Rect, mode: StorageInputMode, input: &str) {
+    let popup_width = 64u16.min(area.width.saturating_sub(4));
+    let popup_height = 5u16.min(area.height.saturating_sub(2));
+    let x = area.x + area.width.saturating_sub(popup_width) / 2;
+    let y = area.y + area.height.saturating_sub(popup_height) / 2;
+    let popup = Rect::new(x, y, popup_width, popup_height);
+    let title = match mode {
+        StorageInputMode::Filter => " Storage Filter ",
+        StorageInputMode::Jump => " Jump To Key ",
+    };
+    let hint = match mode {
+        StorageInputMode::Filter => "Type a substring, prefix*, or re:pattern. Enter applies.",
+        StorageInputMode::Jump => "Type a key or prefix. Enter jumps to the first match.",
+    };
+
+    let widget = Paragraph::new(vec![
+        Line::from(Span::styled(hint, Style::default().fg(COLOR_TEXT_DIM))),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled("> ", Style::default().fg(COLOR_ACCENT)),
+            Span::styled(input.to_string(), Style::default().fg(COLOR_TEXT)),
+        ]),
+    ])
+    .block(
+        Block::default()
+            .title(Span::styled(
+                title,
+                Style::default()
+                    .fg(COLOR_ACCENT)
+                    .add_modifier(Modifier::BOLD),
+            ))
+            .borders(Borders::ALL)
+            .border_type(BorderType::Double)
+            .border_style(Style::default().fg(COLOR_ACCENT))
+            .style(Style::default().bg(COLOR_SURFACE)),
+    );
+
+    f.render_widget(widget, popup);
+}
+
 fn render_budget(f: &mut Frame, app: &DashboardApp, area: Rect) {
     let is_active = app.active_pane == ActivePane::Budget;
     let block = pane_block("  Budget Meters", "4", is_active);
