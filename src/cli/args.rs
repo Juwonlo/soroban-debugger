@@ -1400,6 +1400,14 @@ pub struct ScenarioArgs {
     /// Use 0 to disable the timeout entirely.
     #[arg(long)]
     pub timeout: Option<u64>,
+
+    /// Only run steps that have at least one of these tags (comma-separated)
+    #[arg(long)]
+    pub tags: Option<String>,
+
+    /// Skip steps that have any of these tags (comma-separated)
+    #[arg(long)]
+    pub exclude_tags: Option<String>,
 }
 
 /// Arguments for the doctor/health command
