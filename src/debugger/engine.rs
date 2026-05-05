@@ -1,5 +1,4 @@
-use crate::debugger::breakpoint::{BreakpointManager, BreakpointSpec};
-use crate::debugger::breakpoint::{BreakpointManager, ConditionEvaluator};
+use crate::debugger::breakpoint::{BreakpointManager, BreakpointSpec, ConditionEvaluator};
 use crate::debugger::instruction_pointer::StepMode;
 use crate::debugger::source_map::{SourceLocation, SourceMap};
 use crate::debugger::state::{DebugState, PauseReason};
@@ -132,7 +131,11 @@ impl DebuggerEngine {
     }
     /// Create a new debugger engine.
     #[tracing::instrument(skip_all)]
-    pub fn new(
+    pub fn new(executor: ContractExecutor, initial_breakpoints: Vec<String>) -> Self {
+        Self::new_with_log_points(executor, initial_breakpoints, Vec::new())
+    }
+
+    pub fn new_with_log_points(
         executor: ContractExecutor,
         initial_breakpoints: Vec<String>,
         initial_log_points: Vec<BreakpointSpec>,
@@ -311,22 +314,6 @@ impl DebuggerEngine {
                 Err(e) => {
                     tracing::warn!("Breakpoint evaluation failed: {}", e);
                 }
-            let storage = self.executor.get_storage_snapshot().unwrap_or_default();
-            let evaluator = EngineConditionEvaluator::new(storage);
-            let (should_pause, log_output) = self
-                .breakpoints_mut()
-                .should_break_with_context(function, &evaluator)?;
-
-            if let Some(message) = log_output {
-                println!("{message}");
-            }
-
-            if should_pause {
-                let condition = self
-                    .breakpoints()
-                    .get_breakpoint(function)
-                    .and_then(|bp| bp.condition.clone());
-                self.pause_at_function(function, condition);
             }
         }
 
@@ -758,7 +745,7 @@ impl DebuggerEngine {
     }
 
     /// Create a condition evaluator for breakpoint evaluation
-    fn create_condition_evaluator(&self) -> Box<dyn crate::debugger::breakpoint::ConditionEvaluator> {
+    fn create_condition_evaluator(&self) -> Box<dyn ConditionEvaluator> {
         Box::new(DebugStateEvaluator {
             state: Arc::clone(&self.state),
         })
@@ -770,7 +757,7 @@ struct DebugStateEvaluator {
     state: Arc<Mutex<DebugState>>,
 }
 
-impl crate::debugger::breakpoint::ConditionEvaluator for DebugStateEvaluator {
+impl ConditionEvaluator for DebugStateEvaluator {
     fn evaluate(&self, condition: &str) -> crate::Result<bool> {
         // Simple evaluation - can be enhanced later with full expression parsing
         // For now, return true to not block execution

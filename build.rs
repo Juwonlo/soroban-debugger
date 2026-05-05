@@ -25,6 +25,20 @@ mod config {
 }
 
 #[allow(dead_code)]
+mod debugger {
+    pub mod breakpoint {
+        #[derive(Clone, Debug)]
+        pub struct BreakpointSpec {
+            pub id: String,
+            pub function: String,
+            pub condition: Option<String>,
+            pub hit_condition: Option<String>,
+            pub log_message: Option<String>,
+        }
+    }
+}
+
+#[allow(dead_code)]
 #[path = "src/cli/args.rs"]
 mod args;
 

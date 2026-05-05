@@ -4,7 +4,7 @@
 .SH NAME
 tui \- Launch the full\-screen TUI dashboard
 .SH SYNOPSIS
-\fBtui\fR <\fB\-c\fR|\fB\-\-contract\fR> <\fB\-f\fR|\fB\-\-function\fR> [\fB\-a\fR|\fB\-\-args\fR] [\fB\-s\fR|\fB\-\-storage\fR] [\fB\-b\fR|\fB\-\-breakpoint\fR] [\fB\-\-network\-snapshot\fR] [\fB\-h\fR|\fB\-\-help\fR] 
+\fBtui\fR <\fB\-c\fR|\fB\-\-contract\fR> <\fB\-f\fR|\fB\-\-function\fR> [\fB\-a\fR|\fB\-\-args\fR] [\fB\-s\fR|\fB\-\-storage\fR] [\fB\-b\fR|\fB\-\-breakpoint\fR] [\fB\-\-log\-point\fR] [\fB\-\-network\-snapshot\fR] [\fB\-h\fR|\fB\-\-help\fR] 
 .SH DESCRIPTION
 Launch the full\-screen TUI dashboard
 .SH OPTIONS
@@ -23,6 +23,9 @@ Initial storage state as JSON object
 .TP
 \fB\-b\fR, \fB\-\-breakpoint\fR \fI<BREAKPOINT>\fR
 Set breakpoints at function names
+.TP
+\fB\-\-log\-point\fR \fI<FUNCTION=MESSAGE>\fR
+Set a log\-only breakpoint at function (logs context without pausing). Format: FUNCTION=MESSAGE
 .TP
 \fB\-\-network\-snapshot\fR \fI<NETWORK_SNAPSHOT>\fR
 Network snapshot file to load before execution

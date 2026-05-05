@@ -4,7 +4,7 @@
 .SH NAME
 interactive \- Start an interactive debugging session
 .SH SYNOPSIS
-\fBinteractive\fR <\fB\-c\fR|\fB\-\-contract\fR> [\fB\-\-network\-snapshot\fR] <\fB\-f\fR|\fB\-\-function\fR> [\fB\-a\fR|\fB\-\-args\fR] [\fB\-s\fR|\fB\-\-storage\fR] [\fB\-\-import\-storage\fR] [\fB\-b\fR|\fB\-\-breakpoint\fR] [\fB\-\-mock\fR] [\fB\-\-timeout\fR] [\fB\-\-instruction\-debug\fR] [\fB\-\-step\-instructions\fR] [\fB\-\-step\-mode\fR] [\fB\-\-expected\-hash\fR] [\fB\-h\fR|\fB\-\-help\fR] 
+\fBinteractive\fR <\fB\-c\fR|\fB\-\-contract\fR> [\fB\-\-network\-snapshot\fR] <\fB\-f\fR|\fB\-\-function\fR> [\fB\-a\fR|\fB\-\-args\fR] [\fB\-s\fR|\fB\-\-storage\fR] [\fB\-\-import\-storage\fR] [\fB\-b\fR|\fB\-\-breakpoint\fR] [\fB\-\-log\-point\fR] [\fB\-\-mock\fR] [\fB\-\-timeout\fR] [\fB\-\-instruction\-debug\fR] [\fB\-\-step\-instructions\fR] [\fB\-\-step\-mode\fR] [\fB\-\-expected\-hash\fR] [\fB\-h\fR|\fB\-\-help\fR] 
 .SH DESCRIPTION
 Start an interactive debugging session
 .SH OPTIONS
@@ -29,6 +29,9 @@ Import storage state from JSON file before starting the session
 .TP
 \fB\-b\fR, \fB\-\-breakpoint\fR \fI<BREAKPOINT>\fR
 Set breakpoint at function name
+.TP
+\fB\-\-log\-point\fR \fI<FUNCTION=MESSAGE>\fR
+Set a log\-only breakpoint at function (logs context without pausing). Format: FUNCTION=MESSAGE
 .TP
 \fB\-\-mock\fR \fI<CONTRACT_ID.function=return_value>\fR
 Mock cross\-contract return: CONTRACT_ID.function=return_value (repeatable)

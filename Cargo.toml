@@ -1,5 +1,5 @@
 [package]
-name = "soroban-debug-starter-plugin"
+name = "soroban-debugger"
 version = "0.1.0"
 edition = "2021"
 authors = ["Soroban Debugger Contributors"]
@@ -7,7 +7,7 @@ description = "A debugging tool for Soroban smart contracts"
 repository = "https://github.com/Timi16/soroban-debugger"
 homepage = "https://github.com/Timi16/soroban-debugger"
 documentation = "https://docs.rs/soroban-debugger"
-readme = "README.md"
+readme = "Readme.md"
 license = "MIT OR Apache-2.0"
 keywords = ["stellar", "soroban", "debugger", "blockchain", "smart-contracts"]
 categories = ["development-tools::debugging", "command-line-utilities"]
@@ -159,5 +159,5 @@ path = "src/bin/bench-regression.rs"
 bench = false
 
 [lib]
-crate-type = ["cdylib"]
-
+name = "soroban_debugger"
+crate-type = ["rlib", "cdylib"]
