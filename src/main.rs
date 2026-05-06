@@ -48,7 +48,7 @@ fn handle_deprecations(cli: &mut Cli) {
         Some(Commands::Run(args)) => {
             if let Some(wasm) = args.wasm.take() {
                 print_deprecation_warning("--wasm", "--contract");
-                args.contract = wasm;
+                args.contract = Some(wasm);
             }
             if let Some(snapshot) = args.snapshot.take() {
                 print_deprecation_warning("--snapshot", "--network-snapshot");
@@ -136,6 +136,9 @@ fn main() -> miette::Result<()> {
     Formatter::configure_colors_from_env();
 
     let mut cli = Cli::parse();
+    if let Some(ref history_file) = cli.history_file {
+        std::env::set_var("SOROBAN_DEBUG_HISTORY_FILE", history_file);
+    }
     if should_show_banner(&cli) {
         print_banner();
     }
@@ -193,6 +196,8 @@ fn main() -> miette::Result<()> {
         Some(Commands::Scenario(args)) => {
             soroban_debugger::cli::commands::scenario(args, verbosity)
         }
+        Some(Commands::Doctor(args)) => soroban_debugger::cli::commands::doctor(args),
+        Some(Commands::HistoryPrune(args)) => soroban_debugger::cli::commands::history_prune(args),
         Some(Commands::Repl(mut args)) => {
             args.merge_config(&config);
             tokio::runtime::Runtime::new()
@@ -239,6 +244,42 @@ fn main() -> miette::Result<()> {
                             message.push_str(&format!("  - {}\n", fmt.name));
                         }
                     }
+
+                    let command_conflicts =
+                        soroban_debugger::plugin::registry::global_command_conflicts();
+                    if !command_conflicts.is_empty() {
+                        let mut conflict_entries: Vec<_> = command_conflicts.iter().collect();
+                        conflict_entries.sort_by_key(|(a, _)| *a);
+                        message.push_str("\nPlugin command collisions detected:\n");
+                        for (cmd, providers) in conflict_entries {
+                            if providers.len() > 1 {
+                                message.push_str(&format!(
+                                    "  - {}: winner {} ignored {}\n",
+                                    cmd,
+                                    providers[0],
+                                    providers[1..].join(", ")
+                                ));
+                            }
+                        }
+                    }
+
+                    let formatter_conflicts =
+                        soroban_debugger::plugin::registry::global_formatter_conflicts();
+                    if !formatter_conflicts.is_empty() {
+                        let mut conflict_entries: Vec<_> = formatter_conflicts.iter().collect();
+                        conflict_entries.sort_by_key(|(a, _)| *a);
+                        message.push_str("\nPlugin formatter collisions detected:\n");
+                        for (formatter, providers) in conflict_entries {
+                            if providers.len() > 1 {
+                                message.push_str(&format!(
+                                    "  - {}: winner {} ignored {}\n",
+                                    formatter,
+                                    providers[0],
+                                    providers[1..].join(", ")
+                                ));
+                            }
+                        }
+                    }
                     Err(soroban_debugger::DebuggerError::ExecutionError(message).into())
                 }
                 Err(e) => {
@@ -254,6 +295,9 @@ fn main() -> miette::Result<()> {
                         wasm: None,
                         functions: true,
                         metadata: false,
+                        format: soroban_debugger::cli::args::OutputFormat::Pretty,
+                        source_map_diagnostics: false,
+                        source_map_limit: 20,
                         expected_hash: None,
                         dependency_graph: None,
                     },
@@ -264,6 +308,11 @@ fn main() -> miette::Result<()> {
                 soroban_debugger::cli::commands::show_budget_trend(
                     cli.trend_contract.as_deref(),
                     cli.trend_function.as_deref(),
+                    soroban_debugger::history::RegressionConfig {
+                        threshold_pct: cli.trend_regression_threshold_pct,
+                        lookback: cli.trend_regression_lookback,
+                        smoothing_window: cli.trend_regression_smoothing,
+                    },
                 )
             } else {
                 let mut cmd = Cli::command();
@@ -276,12 +325,13 @@ fn main() -> miette::Result<()> {
 
     if let Err(err) = result {
         if run_json_output_requested {
-            let output = soroban_debugger::cli::output::CommandOutput::<()> {
-                status: "error".to_string(),
-                result: None,
-                budget: None,
-                errors: Some(vec![err.to_string()]),
-            };
+            let mut message = err.to_string();
+            if let Some(help) = err.help() {
+                message.push_str(&format!(" | hint: {}", help));
+            }
+            let output = soroban_debugger::output::VersionedOutput::<serde_json::Value>::error(
+                "run", message,
+            );
             if let Ok(json) = serde_json::to_string_pretty(&output) {
                 println!("{}", json);
             }

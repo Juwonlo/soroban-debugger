@@ -133,6 +133,29 @@ fn test_parse_fixed_length_tuple() {
 }
 
 #[test]
+fn test_parse_tuple_fixed_length_array() {
+    let parser = create_parser();
+    let result =
+        parser.parse_args_string(r#"[{"type": "tuple", "arity": 2, "value": [1, "hello"]}]"#);
+    assert!(result.is_ok(), "Failed to parse tuple: {:?}", result.err());
+    assert_eq!(result.unwrap().len(), 1);
+}
+
+#[test]
+fn test_parse_tuple_wrong_arity_gives_clear_error() {
+    let parser = create_parser();
+    let result = parser.parse_args_string(r#"[{"type": "tuple", "arity": 2, "value": [1, 2, 3]}]"#);
+    assert!(result.is_err());
+    let err = result.unwrap_err().to_string();
+    assert!(
+        err.contains("Tuple arity mismatch: expected 2, got 3"),
+        "unexpected error: {err}"
+    );
+}
+
+// ── Error handling ───────────────────────────────────────────────────
+
+#[test]
 fn test_error_tuple_wrong_arity() {
     let parser = create_parser();
     let result = parser.parse_args_string(r#"[{"type": "tuple", "value": [1, 2, 3], "arity": 2}]"#);

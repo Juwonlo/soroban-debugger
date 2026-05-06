@@ -1,13 +1,17 @@
 /// REPL command parsing and representation
-///
 /// Parses user input into structured REPL commands.
 use crate::Result;
 
 /// Represents a REPL command
 #[derive(Debug, Clone)]
 pub enum ReplCommand {
+    /// No operation for empty input
+    Noop,
     /// Call a contract function: call <function> [args...]
-    Call { function: String, args: Vec<String> },
+    Call {
+        function: String,
+        args: Vec<String>,
+    },
     /// Inspect storage: storage
     Storage,
     /// Show command history: history
@@ -18,34 +22,102 @@ pub enum ReplCommand {
     Help,
     /// Exit REPL: exit
     Exit,
+    /// Set a breakpoint: break <function> [condition]
+    Break {
+        function: String,
+        condition: Option<String>,
+    },
+    /// List breakpoints: list-breaks
+    ListBreaks,
+    /// Clear a breakpoint: clear-break <function>
+    ClearBreak {
+        function: String,
+    },
+    /// Open the command palette
+    Palette,
+    Functions,
 }
 
 impl ReplCommand {
     /// Built-in REPL commands for completion
     pub fn builtins() -> &'static [&'static str] {
-        &["call", "storage", "history", "clear", "help", "exit", "quit"]
+        &[
+            "call",
+            "storage",
+            "history",
+            "clear",
+            "help",
+            "exit",
+            "quit",
+            "break",
+            "list-breaks",
+            "clear-break",
+            "palette",
+            "functions",
+        ]
+    }
+
+    /// Returns true if the command contains sensitive data (e.g. tokens, keys)
+    /// and should be excluded from persistent history.
+    pub fn is_sensitive(&self) -> bool {
+        match self {
+            ReplCommand::Call { args, .. } => args.iter().any(|arg| {
+                let lower = arg.to_lowercase();
+                lower.contains("secret")
+                    || lower.contains("token")
+                    || lower.contains("key")
+                    || lower.contains("password")
+            }),
+            _ => false,
+        }
     }
 
     /// Parse a command string into a ReplCommand
     pub fn parse(input: &str) -> Result<Self> {
         let trimmed = input.trim();
-        let parts: Vec<&str> = trimmed.split_whitespace().collect();
+        let parts: Vec<String> =
+            shlex::split(trimmed).ok_or_else(|| miette::miette!("Invalid quoted command input"))?;
 
         if parts.is_empty() {
-            return Err(miette::miette!("Empty command"));
+            return Ok(ReplCommand::Noop);
         }
 
-        match parts[0] {
+        match parts[0].as_str() {
             "call" => {
                 if parts.len() < 2 {
                     return Err(miette::miette!("call requires a function name"));
                 }
-                let function = parts[1].to_string();
-                let args = parts[2..].iter().map(|s| s.to_string()).collect();
+                let function = parts[1].clone();
+                let args = parts[2..].to_vec();
                 Ok(ReplCommand::Call { function, args })
+            }
+            "break" => {
+                if parts.len() < 2 {
+                    return Err(miette::miette!("break requires a function name"));
+                }
+                let function = parts[1].to_string();
+                let condition = if parts.len() > 2 {
+                    Some(parts[2..].join(" "))
+                } else {
+                    None
+                };
+                Ok(ReplCommand::Break {
+                    function,
+                    condition,
+                })
+            }
+            "list-breaks" => Ok(ReplCommand::ListBreaks),
+            "clear-break" => {
+                if parts.len() < 2 {
+                    return Err(miette::miette!("clear-break requires a function name"));
+                }
+                let function = parts[1].to_string();
+                Ok(ReplCommand::ClearBreak { function })
             }
             "storage" => Ok(ReplCommand::Storage),
             "history" => Ok(ReplCommand::History),
+            "palette" => Ok(ReplCommand::Palette),
+            "functions" => Ok(ReplCommand::Functions),
             "clear" => Ok(ReplCommand::Clear),
             "help" => Ok(ReplCommand::Help),
             "exit" | "quit" => Ok(ReplCommand::Exit),
@@ -74,6 +146,18 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_call_command_with_quoted_arg() {
+        let cmd = ReplCommand::parse(r#"call transfer "x == 1" 100"#).unwrap();
+        match cmd {
+            ReplCommand::Call { function, args } => {
+                assert_eq!(function, "transfer");
+                assert_eq!(args, vec!["x == 1", "100"]);
+            }
+            _ => panic!("Expected Call command"),
+        }
+    }
+
+    #[test]
     fn test_parse_storage_command() {
         let cmd = ReplCommand::parse("storage").unwrap();
         assert!(matches!(cmd, ReplCommand::Storage));
@@ -95,14 +179,32 @@ mod tests {
     }
 
     #[test]
+    fn test_empty_input_is_noop() {
+        let cmd = ReplCommand::parse("   ").unwrap();
+        assert!(matches!(cmd, ReplCommand::Noop));
+    }
+
+    #[test]
     fn test_empty_call_fails() {
         let result = ReplCommand::parse("call");
         assert!(result.is_err());
     }
 
     #[test]
+    fn test_parse_functions_command() {
+        let cmd = ReplCommand::parse("functions").unwrap();
+        assert!(matches!(cmd, ReplCommand::Functions));
+    }
+
+    #[test]
     fn test_unknown_command_fails() {
         let result = ReplCommand::parse("unknown");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_invalid_quote_fails() {
+        let result = ReplCommand::parse(r#"call transfer "unterminated"#);
         assert!(result.is_err());
     }
 }

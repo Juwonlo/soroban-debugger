@@ -1,13 +1,37 @@
 use crate::debugger::instruction_pointer::{InstructionPointer, StepMode};
 use crate::inspector::stack::CallStackInspector;
+use crate::output::InvocationReason;
 use crate::runtime::instruction::Instruction;
 use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum PauseReason {
+    Breakpoint,
+    StepBoundary,
+    Panic,
+    EndOfExecution,
+    UserInterrupt,
+}
+
+impl PauseReason {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Breakpoint => "breakpoint",
+            Self::StepBoundary => "step_boundary",
+            Self::Panic => "panic",
+            Self::EndOfExecution => "end_of_execution",
+            Self::UserInterrupt => "user_interrupt",
+        }
+    }
+}
 
 /// Represents the current state of the debugger.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DebugState {
     current_function: Option<String>,
     current_args: Option<String>,
+    current_invocation_reason: Option<InvocationReason>,
     step_count: usize,
     instruction_pointer: InstructionPointer,
     #[serde(skip)]
@@ -16,6 +40,7 @@ pub struct DebugState {
     instructions: Vec<Instruction>,
     instruction_debug_enabled: bool,
     call_stack: CallStackInspector,
+    pause_reason: Option<PauseReason>,
 }
 
 impl DebugState {
@@ -24,19 +49,27 @@ impl DebugState {
         Self {
             current_function: None,
             current_args: None,
+            current_invocation_reason: None,
             step_count: 0,
             instruction_pointer: InstructionPointer::new(),
             current_instruction: None,
             instructions: Vec::new(),
             instruction_debug_enabled: false,
             call_stack: CallStackInspector::new(),
+            pause_reason: None,
         }
     }
 
     /// Set the current function being executed
-    pub fn set_current_function(&mut self, function: String, args: Option<String>) {
+    pub fn set_current_function(
+        &mut self,
+        function: String,
+        args: Option<String>,
+        invocation_reason: Option<InvocationReason>,
+    ) {
         self.current_function = Some(function);
         self.current_args = args;
+        self.current_invocation_reason = invocation_reason;
     }
 
     pub fn current_function(&self) -> Option<&str> {
@@ -46,6 +79,10 @@ impl DebugState {
     /// Get current function arguments
     pub fn current_args(&self) -> Option<&str> {
         self.current_args.as_deref()
+    }
+
+    pub fn current_invocation_reason(&self) -> Option<InvocationReason> {
+        self.current_invocation_reason
     }
 
     /// Increment step count
@@ -183,6 +220,18 @@ impl DebugState {
         &mut self.call_stack
     }
 
+    pub fn set_pause_reason(&mut self, reason: PauseReason) {
+        self.pause_reason = Some(reason);
+    }
+
+    pub fn clear_pause_reason(&mut self) {
+        self.pause_reason = None;
+    }
+
+    pub fn pause_reason(&self) -> Option<PauseReason> {
+        self.pause_reason
+    }
+
     pub fn reset(&mut self) {
         self.current_function = None;
         self.current_args = None;
@@ -190,6 +239,7 @@ impl DebugState {
         self.instruction_pointer.reset();
         self.current_instruction = self.instructions.first().cloned();
         self.call_stack.clear();
+        self.pause_reason = None;
     }
 
     pub fn get_instruction_context(&self, context_size: usize) -> Vec<(usize, &Instruction, bool)> {

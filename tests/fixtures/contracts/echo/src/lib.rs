@@ -6,7 +6,13 @@ pub struct Echo;
 
 #[contractimpl]
 impl Echo {
-    pub fn echo(_env: Env, v: Val) -> Val {
+    fn helper(v: Val) -> Val {
+        // BREAKPOINT_MARKER: non-exported-helper
         v
+    }
+
+    pub fn echo(_env: Env, v: Val) -> Val {
+        // BREAKPOINT_MARKER: exported-echo
+        Self::helper(v)
     }
 }

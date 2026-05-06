@@ -13,6 +13,10 @@ pub struct Config {
     pub debug: DebugConfig,
     #[serde(default)]
     pub output: OutputConfig,
+    #[serde(default)]
+    pub keybindings: Keybindings,
+    #[serde(default)]
+    pub repl: ReplConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -23,6 +27,11 @@ pub struct DebugConfig {
     /// Default verbosity level (0-3)
     #[serde(default)]
     pub verbosity: Option<u8>,
+    /// Maximum forward line adjustment for source breakpoints.
+    /// If a breakpoint is set on a non-executable line, the debugger will search
+    /// up to this many lines forward for the nearest executable instruction.
+    #[serde(default)]
+    pub max_forward_line_adjust: Option<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -33,6 +42,56 @@ pub struct OutputConfig {
     /// Show events by default
     #[serde(default)]
     pub show_events: Option<bool>,
+    /// Path to the analyzer suppressions TOML file
+    #[serde(default)]
+    pub suppressions_file: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ReplConfig {
+    #[serde(default)]
+    pub save_history: Option<bool>,
+    #[serde(default)]
+    pub history_file: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Keybindings {
+    #[serde(default = "default_step_key")]
+    pub step: String,
+    #[serde(default = "default_continue_key")]
+    pub continue_exec: String,
+    #[serde(default = "default_inspect_key")]
+    pub inspect: String,
+    #[serde(default = "default_quit_key")]
+    pub quit: String,
+}
+
+impl Default for Keybindings {
+    fn default() -> Self {
+        Self {
+            step: default_step_key(),
+            continue_exec: default_continue_key(),
+            inspect: default_inspect_key(),
+            quit: default_quit_key(),
+        }
+    }
+}
+
+fn default_step_key() -> String {
+    "s".to_string()
+}
+
+fn default_continue_key() -> String {
+    "c".to_string()
+}
+
+fn default_inspect_key() -> String {
+    "inspect".to_string()
+}
+
+fn default_quit_key() -> String {
+    "quit".to_string()
 }
 
 impl Config {

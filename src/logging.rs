@@ -18,6 +18,23 @@ pub fn log_display<D: fmt::Display>(message: D, level: LogLevel) {
     }
 }
 
+pub fn log_plugin_incident(report: &crate::output::PluginIncidentReport) {
+    tracing::error!(
+        plugin = report.plugin.as_str(),
+        plugin_version = report.plugin_version.as_deref().unwrap_or("unknown"),
+        library_path = report.library_path.as_deref().unwrap_or("unknown"),
+        invocation_kind = report.invocation_kind.as_str(),
+        incident = match report.incident {
+            crate::output::PluginIncidentType::Panic => "panic",
+            crate::output::PluginIncidentType::Timeout => "timeout",
+        },
+        action_taken = report.action_taken.as_str(),
+        core_debugger_status = report.core_debugger_status.as_str(),
+        "{}",
+        report.message
+    );
+}
+
 /// Log levels matching tracing crate levels.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LogLevel {
@@ -59,7 +76,12 @@ pub fn log_execution_complete(result: &str) {
 
 /// Log breakpoint event.
 pub fn log_breakpoint(function: &str) {
-    tracing::debug!(function, "Breakpoint paused");
+    tracing::info!(function, "Breakpoint hit");
+}
+
+/// Log a log point message (non-pausing breakpoint).
+pub fn log_breakpoint_log(function: &str, message: &str) {
+    tracing::info!(function, message, "Log point hit");
 }
 
 /// Log storage access.
@@ -113,11 +135,11 @@ pub fn log_interactive_mode_start() {
 
 /// Log breakpoint operations.
 pub fn log_breakpoint_set(function: &str) {
-    tracing::debug!(function, "Breakpoint set");
+    tracing::info!(function, "Breakpoint set");
 }
 
 pub fn log_breakpoint_cleared(function: &str) {
-    tracing::debug!(function, "Breakpoint cleared");
+    tracing::info!(function, "Breakpoint cleared");
 }
 
 /// Log repeated execution start.

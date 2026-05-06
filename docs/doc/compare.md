@@ -17,6 +17,16 @@ Save the report to a file instead of stdout:
 soroban-debug compare examples/trace_a.json examples/trace_b.json --output report.txt
 ```
 
+Ignore noisy fields or paths directly in the compare step:
+
+```bash
+soroban-debug compare baseline.json new.json \
+  --ignore-field timestamp \
+  --ignore-field seq \
+  --ignore-path /storage/ledger_seq \
+  --ignore-path /return_value/meta/debug
+```
+
 ## What is compared?
 
 | Dimension         | Details                                               |
@@ -26,6 +36,18 @@ soroban-debug compare examples/trace_a.json examples/trace_b.json --output repor
 | **Return values** | Equality check with full value display                |
 | **Execution flow**| LCS-based unified diff of the call sequence           |
 | **Events**        | Side-by-side comparison of emitted events             |
+
+## Ignore filters
+
+- `--ignore-field <FIELD>` removes that object field name everywhere in the trace before diffing.
+- `--ignore-path <PATH>` removes one slash-delimited subtree before diffing. The match applies to the exact path and everything below it.
+- Paths are rooted at the trace object. Common examples:
+  - `/storage/fee_pool`
+  - `/storage/balance:Alice/timestamp`
+  - `/return_value/meta/timestamp`
+  - `/events/0/data`
+
+These filters affect storage, budget, return values, call sequences, and events in the rendered report.
 
 ## Trace JSON format
 
@@ -144,5 +166,7 @@ Suppose `v1.0` of your token contract transfers the full amount, and
 - Keep trace files in version control alongside your contract code
   so you can compare across Git commits.
 - Use `--output` to save the report, then `diff` two reports over time.
+- Use `--ignore-field` for volatile metadata such as timestamps, nonces, or sequence numbers.
+- Use `--ignore-path` for selected storage keys or specific nested JSON branches that are expected to vary.
 - Combine with CI: generate traces in your test suite and run
   `soroban-debug compare` as a CI step to catch regressions automatically.

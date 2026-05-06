@@ -43,6 +43,8 @@ Plugins are loaded from `~/.soroban-debug/plugins/` on startup. Each plugin must
 2. Have a `plugin.toml` manifest file
 3. Provide a shared library (`.so`, `.dylib`, or `.dll`)
 
+By default, the debugger runs plugin trust checks in `warn` mode. Unsigned or untrusted plugins still load, but they emit warnings with remediation steps. In `enforce` mode, they are blocked before the shared library is loaded.
+
 ```
 ~/.soroban-debug/plugins/
 ├── my-plugin/
@@ -115,6 +117,7 @@ impl MyPlugin {
                 },
                 library: "libmy_soroban_plugin.dylib".to_string(),
                 dependencies: vec![],
+                signature: None,
             },
         }
     }
@@ -152,6 +155,7 @@ pub extern "C" fn create_plugin() -> *mut dyn InspectorPlugin {
 ### Step 4: Create plugin.toml
 
 ```toml
+schema_version = "1.0.0"
 name = "my-plugin"
 version = "1.0.0"
 description = "My awesome plugin for Soroban debugger"
@@ -410,6 +414,7 @@ The `plugin.toml` file describes your plugin:
 
 ```toml
 # Required fields
+schema_version = "1.0.0"
 name = "plugin-name"
 version = "1.0.0"
 description = "Plugin description"
@@ -429,7 +434,31 @@ supports_hot_reload = true      # Can be hot-reloaded
 
 # Plugin dependencies (other plugins required)
 dependencies = []
+
+# Optional detached signatures for trusted loading
+[signature]
+signer = "example-signer"
+public_key = "BASE64_ED25519_PUBLIC_KEY"
+manifest_signature = "BASE64_SIGNATURE_OF_UNSIGNED_MANIFEST"
+library_signature = "BASE64_SIGNATURE_OF_PLUGIN_LIBRARY"
 ```
+
+### Trust Policy
+
+Plugin trust policy is controlled through environment variables:
+
+- `SOROBAN_DEBUG_PLUGIN_TRUST_MODE=off|warn|enforce`
+- `SOROBAN_DEBUG_PLUGIN_ALLOWLIST=plugin-a,plugin-b`
+- `SOROBAN_DEBUG_PLUGIN_DENYLIST=plugin-c`
+- `SOROBAN_DEBUG_PLUGIN_ALLOWED_SIGNERS=team-release-key,abcdef1234...`
+
+Policy behavior:
+
+- `off`: trust checks are skipped
+- `warn`: trust failures produce warnings but plugins still load
+- `enforce`: denylisted, unsigned, invalidly signed, or unapproved plugins are blocked
+
+In `enforce` mode, a plugin must either be explicitly allowlisted or provide a valid Ed25519 signature from an allowed signer.
 
 ## Installation and Loading
 
@@ -467,14 +496,47 @@ On startup, the debugger:
 1. Scans `~/.soroban-debug/plugins/` for subdirectories
 2. Looks for `plugin.toml` in each subdirectory
 3. Validates the manifest
-4. Checks version compatibility
-5. Resolves dependencies
-6. Loads the shared library
-7. Calls `initialize()`
+4. Evaluates trust policy, signature state, allowlist, and denylist
+5. Checks version compatibility
+6. Resolves dependencies
+7. Loads the shared library
+8. Calls `initialize()`
 
 ## Hot-Reload Support
 
-Plugins that support hot-reload can be updated without restarting the debugger.
+Plugins that support hot-reload can be updated without restarting the debugger. When a plugin is reloaded, the debugger automatically detects and reports all changes, making it easy to verify that your updates were loaded correctly.
+
+### Change Detection
+
+The hot-reload system tracks and reports:
+
+- **Version changes**: Old version → New version
+- **Capability changes**: Which capabilities were enabled or disabled
+- **Command changes**: Commands added or removed
+- **Formatter changes**: Formatters added or removed
+- **Dependency changes**: Dependencies added or removed
+
+Example reload output:
+```
+Plugin 'example-logger' reload changes:
+  Version: 1.0.0 → 1.1.0
+  Capabilities:
+    provides_commands: false → true
+  Commands added: log-stats, clear-log
+  Formatters added: json-formatter
+  Dependencies added: helper-plugin
+```
+
+If no changes are detected, you'll see:
+```
+Plugin 'example-logger' reloaded with no changes
+```
+
+This immediate feedback helps during iterative plugin development, allowing you to:
+- Verify that code changes were compiled and loaded
+- Confirm that new features are properly exposed
+- Catch unintended changes or regressions
+- Trust that the reload succeeded as expected
 
 ### Implementing Hot-Reload
 
@@ -645,13 +707,17 @@ The plugin API follows semantic versioning:
 
 Check `min_debugger_version` in your manifest to specify the minimum required debugger version.
 
+For details on manifest file versioning, see Plugin Manifest Versioning.
+
 ## Troubleshooting
 
 ### Plugin Not Loading
 
 - Check that `plugin.toml` is valid TOML
+- Check that the `schema_version` in `plugin.toml` is compatible with the debugger version.
 - Verify the library file exists and has the correct name
 - Ensure the library exports `create_plugin` symbol
+- If trust policy blocked the plugin, sign the manifest and library, add the plugin to the allowlist, or relax `SOROBAN_DEBUG_PLUGIN_TRUST_MODE` for local-only development
 - Check debugger logs for error messages
 
 ### Hot-Reload Fails

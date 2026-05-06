@@ -61,5 +61,7 @@ fn test_compare_help_command() {
         .success()
         .stdout(predicate::str::contains("TRACE_A"))
         .stdout(predicate::str::contains("TRACE_B"))
-        .stdout(predicate::str::contains("--output"));
+        .stdout(predicate::str::contains("--output"))
+        .stdout(predicate::str::contains("--ignore-path"))
+        .stdout(predicate::str::contains("--ignore-field"));
 }

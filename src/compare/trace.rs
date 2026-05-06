@@ -7,7 +7,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// Top-level execution trace that is serialized to / deserialized from JSON.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -85,6 +85,26 @@ pub struct EventEntry {
     pub data: Option<String>,
 }
 
+impl std::fmt::Display for CallEntry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let indent = "  ".repeat(self.depth as usize);
+        if let Some(ref args) = self.args {
+            write!(f, "{}{}({})", indent, self.function, args)
+        } else {
+            write!(f, "{}{}()", indent, self.function)
+        }
+    }
+}
+
+impl std::fmt::Display for EventEntry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let contract = self.contract_id.as_deref().unwrap_or("<unknown-contract>");
+        let topics = self.topics.join(", ");
+        let data = self.data.as_deref().unwrap_or("<no-data>");
+        write!(f, "[{}] topics=[{}] data={}", contract, topics, data)
+    }
+}
+
 impl ExecutionTrace {
     /// Load an execution trace from a JSON file.
     pub fn from_file<P: AsRef<Path>>(path: P) -> crate::Result<Self> {
@@ -103,5 +123,29 @@ impl ExecutionTrace {
         Ok(serde_json::to_string_pretty(self).map_err(|e| {
             crate::DebuggerError::FileError(format!("Failed to serialize trace: {}", e))
         })?)
+    }
+
+    pub fn manifest_path_for_trace(trace_path: &Path) -> PathBuf {
+        trace_path.with_extension("manifest.json")
+    }
+
+    pub fn to_replay_artifact_manifest(
+        &self,
+        trace_path: &Path,
+    ) -> crate::output::ReplayArtifactManifest {
+        crate::output::ReplayArtifactManifest {
+            schema_version: crate::output::SCHEMA_VERSION.to_string(),
+            artifact_group: "replay_artifacts".to_string(),
+            created_at: chrono::Utc::now().to_rfc3339(),
+            label: self.label.clone(),
+            contract: self.contract.clone(),
+            function: self.function.clone(),
+            files: vec![crate::output::ReplayArtifactFile {
+                kind: crate::output::ReplayArtifactKind::Trace,
+                path: trace_path.display().to_string(),
+                description: Some("Primary execution trace used for replay".to_string()),
+                compression: None,
+            }],
+        }
     }
 }

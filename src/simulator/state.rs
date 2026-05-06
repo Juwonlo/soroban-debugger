@@ -159,6 +159,38 @@ impl NetworkSnapshot {
         self.ledger.validate()?;
         Ok(())
     }
+
+    /// Calculate a deterministic SHA-256 fingerprint of the current state.
+    /// This fingerprint uniquely represents the state and is stable across runs.
+    /// It is insensitive to the ordering of accounts and contracts.
+    pub fn fingerprint(&self) -> String {
+        // Create a normalized copy of the snapshot
+        let mut normalized = self.clone();
+
+        // Sort accounts by address for determinism
+        normalized
+            .accounts
+            .sort_by(|a, b| a.address.cmp(&b.address));
+
+        // Sort contracts by contract_id for determinism
+        normalized
+            .contracts
+            .sort_by(|a, b| a.contract_id.cmp(&b.contract_id));
+
+        // Data maps (BTreeMap) and Storage maps (BTreeMap) are already sorted by keys.
+        // Serialize to compact JSON which does not rely on whitespace
+        let json =
+            serde_json::to_string(&normalized).expect("Failed to serialize normalized state");
+
+        // Compute SHA-256 hash
+        use sha2::{Digest, Sha256};
+        let mut hasher = Sha256::new();
+        hasher.update(json.as_bytes());
+        let result = hasher.finalize();
+
+        // Return as a hex string
+        hex::encode(result)
+    }
 }
 
 /// Ledger metadata (sequence, timestamp, network info)
@@ -421,5 +453,40 @@ mod tests {
             contract.get_storage("balance"),
             Some(&serde_json::json!(1000))
         );
+    }
+
+    #[test]
+    fn test_fingerprint_determinism() {
+        let mut snapshot1 = NetworkSnapshot::new(100, "Test Network", 1234567890);
+        let mut snapshot2 = NetworkSnapshot::new(100, "Test Network", 1234567890);
+
+        let acc1 = AccountState::new("GABCD123", "1000000", 1);
+        let acc2 = AccountState::new("GXYZ789", "500000", 2);
+
+        // Add in different order
+        snapshot1.add_account(acc1.clone()).unwrap();
+        snapshot1.add_account(acc2.clone()).unwrap();
+
+        snapshot2.add_account(acc2).unwrap();
+        snapshot2.add_account(acc1).unwrap();
+
+        let contract1 = ContractState::new("C111", "aaaa");
+        let contract2 = ContractState::new("C222", "bbbb");
+
+        // Add in different order
+        snapshot1.add_contract(contract1.clone()).unwrap();
+        snapshot1.add_contract(contract2.clone()).unwrap();
+
+        snapshot2.add_contract(contract2).unwrap();
+        snapshot2.add_contract(contract1).unwrap();
+
+        // The fingerprints should be exactly the same despite insertion order
+        assert_eq!(snapshot1.fingerprint(), snapshot2.fingerprint());
+
+        // Modify a state detail should change fingerprint
+        let mut snapshot3 = snapshot1.clone();
+        snapshot3.get_account_mut("GABCD123").unwrap().balance = "1000001".to_string();
+
+        assert_ne!(snapshot1.fingerprint(), snapshot3.fingerprint());
     }
 }

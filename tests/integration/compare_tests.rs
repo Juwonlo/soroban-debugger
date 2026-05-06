@@ -4,6 +4,7 @@
 //! disk, loading them via `ExecutionTrace::from_file`, running the
 //! comparison engine, and verifying the report output.
 
+use soroban_debugger::compare::engine::CompareFilters;
 use soroban_debugger::compare::{CompareEngine, ExecutionTrace};
 use std::io::Write;
 use tempfile::NamedTempFile;
@@ -214,4 +215,43 @@ fn test_compare_empty_traces() {
     assert!(report.flow_diff.identical);
     assert!(report.event_diff.identical);
     assert!(report.budget_diff.cpu_delta.is_none());
+}
+
+#[test]
+fn test_compare_pipeline_ignore_path_and_field_filters() {
+    let fa = write_trace(
+        r#"{
+  "label": "baseline",
+  "storage": {
+    "balance:Alice": { "amount": 900, "timestamp": 1 },
+    "ledger_seq": 100
+  },
+  "return_value": { "status": "ok", "timestamp": 1 }
+}"#,
+    );
+    let fb = write_trace(
+        r#"{
+  "label": "candidate",
+  "storage": {
+    "balance:Alice": { "amount": 900, "timestamp": 2 },
+    "ledger_seq": 101
+  },
+  "return_value": { "status": "ok", "timestamp": 2 }
+}"#,
+    );
+
+    let a = ExecutionTrace::from_file(fa.path()).unwrap();
+    let b = ExecutionTrace::from_file(fb.path()).unwrap();
+    let filters = CompareFilters::new(
+        vec!["/storage/ledger_seq".to_string()],
+        vec!["timestamp".to_string()],
+    )
+    .unwrap();
+
+    let report = CompareEngine::compare_with_filters(&a, &b, &filters);
+
+    assert!(report.storage_diff.modified.is_empty());
+    assert!(report.storage_diff.only_in_a.is_empty());
+    assert!(report.storage_diff.only_in_b.is_empty());
+    assert!(report.return_value_diff.equal);
 }

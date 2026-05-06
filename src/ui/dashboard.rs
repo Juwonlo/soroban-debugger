@@ -12,9 +12,12 @@
 use crate::debugger::engine::DebuggerEngine;
 use crate::inspector::budget::BudgetInfo;
 use crate::inspector::stack::CallFrame;
+use crate::inspector::storage::{StorageInspector, StorageQuery};
 use crate::{DebuggerError, Result};
 use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyModifiers},
+    event::{
+        self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEvent, KeyModifiers,
+    },
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -30,7 +33,7 @@ use ratatui::{
     Frame, Terminal,
 };
 use std::{
-    collections::VecDeque,
+    collections::{HashSet, VecDeque},
     io,
     time::{Duration, Instant},
 };
@@ -59,6 +62,7 @@ pub enum ActivePane {
     Storage,
     Budget,
     Log,
+    Diagnostics,
 }
 
 impl ActivePane {
@@ -68,17 +72,19 @@ impl ActivePane {
             ActivePane::CallStack => ActivePane::Storage,
             ActivePane::Storage => ActivePane::Budget,
             ActivePane::Budget => ActivePane::Log,
-            ActivePane::Log => ActivePane::Execution,
+            ActivePane::Log => ActivePane::Diagnostics,
+            ActivePane::Diagnostics => ActivePane::Execution,
         }
     }
 
     fn prev(self) -> Self {
         match self {
-            ActivePane::Execution => ActivePane::Log,
+            ActivePane::Execution => ActivePane::Diagnostics,
             ActivePane::CallStack => ActivePane::Execution,
             ActivePane::Storage => ActivePane::CallStack,
             ActivePane::Budget => ActivePane::Storage,
             ActivePane::Log => ActivePane::Budget,
+            ActivePane::Diagnostics => ActivePane::Log,
         }
     }
 
@@ -89,6 +95,7 @@ impl ActivePane {
             ActivePane::Storage => "Storage",
             ActivePane::Budget => "Budget Meters",
             ActivePane::Log => "Execution Log",
+            ActivePane::Diagnostics => "Diagnostics",
         }
     }
 }
@@ -117,6 +124,11 @@ pub struct DashboardApp {
     storage_entries: Vec<(String, String)>,
     storage_state: ListState,
     storage_scroll_state: ScrollbarState,
+    storage_filter: String,
+    storage_selected: usize,
+    storage_page_size: usize,
+    storage_input_mode: Option<StorageInputMode>,
+    storage_input_value: String,
 
     // Budget pane
     budget_info: BudgetInfo,
@@ -127,6 +139,11 @@ pub struct DashboardApp {
     log_entries: Vec<LogEntry>,
     log_scroll: usize,
     log_scroll_state: ScrollbarState,
+
+    // Diagnostics pane
+    diagnostics: Vec<crate::output::DiagnosticRecord>,
+    diagnostics_state: ListState,
+    diagnostics_scroll_state: ScrollbarState,
 
     // Misc
     last_refresh: Instant,
@@ -156,6 +173,12 @@ enum LogLevel {
 enum StatusKind {
     Info,
     Error,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum StorageInputMode {
+    Filter,
+    Jump,
 }
 
 impl DashboardApp {
@@ -192,6 +215,11 @@ impl DashboardApp {
                 state
             },
             storage_scroll_state: ScrollbarState::default().content_length(0),
+            storage_filter: String::new(),
+            storage_selected: 0,
+            storage_page_size: 1,
+            storage_input_mode: None,
+            storage_input_value: String::new(),
             budget_info: BudgetInfo {
                 cpu_instructions: 0,
                 cpu_limit: 100_000_000,
@@ -203,6 +231,13 @@ impl DashboardApp {
             log_entries: Vec::new(),
             log_scroll: 0,
             log_scroll_state: ScrollbarState::default().content_length(0),
+            diagnostics: Vec::new(),
+            diagnostics_state: {
+                let mut state = ListState::default();
+                state.select(Some(0));
+                state
+            },
+            diagnostics_scroll_state: ScrollbarState::default().content_length(0),
             last_refresh: Instant::now(),
             step_count: 0,
             function_name,
@@ -292,11 +327,7 @@ impl DashboardApp {
         // ── Storage ────────────────────────────────────────────────────
         let new_entries: Vec<(String, String)> = match self.engine.executor().get_storage_snapshot()
         {
-            Ok(snapshot) => {
-                let mut v: Vec<(String, String)> = snapshot.into_iter().collect();
-                v.sort_by(|a, b| a.0.cmp(&b.0));
-                v
-            }
+            Ok(snapshot) => StorageInspector::sorted_entries_from_map(&snapshot),
             Err(e) => {
                 self.push_log(LogLevel::Error, format!("Storage snapshot failed: {}", e));
                 Vec::new()
@@ -310,10 +341,210 @@ impl DashboardApp {
             );
         }
         self.storage_entries = new_entries;
-        let slen = self.storage_entries.len();
-        self.storage_scroll_state = self.storage_scroll_state.content_length(slen);
+        self.clamp_storage_selection();
+        self.sync_storage_scroll_state();
 
+        self.rebuild_diagnostics();
         self.last_refresh = Instant::now();
+    }
+
+    fn rebuild_diagnostics(&mut self) {
+        let mut diagnostics = crate::output::collect_runtime_diagnostics(
+            self.engine.source_map().is_some(),
+            &self.budget_info,
+            self.last_error.as_deref(),
+        );
+
+        let recent_alerts: Vec<_> = self
+            .log_entries
+            .iter()
+            .filter(|entry| matches!(entry.level, LogLevel::Warn | LogLevel::Error))
+            .collect();
+        for entry in recent_alerts
+            .into_iter()
+            .rev()
+            .take(8)
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+        {
+            let severity = match entry.level {
+                LogLevel::Warn => crate::output::DiagnosticSeverity::Warning,
+                LogLevel::Error => crate::output::DiagnosticSeverity::Error,
+                _ => continue,
+            };
+            diagnostics.push(crate::output::DiagnosticRecord::new(
+                "log",
+                entry.message.clone(),
+                Some(format!("Logged at {}", entry.timestamp)),
+                severity,
+            ));
+        }
+
+        let mut seen = HashSet::new();
+        diagnostics.retain(|diagnostic| {
+            seen.insert(format!(
+                "{}|{}|{}",
+                diagnostic.source,
+                diagnostic.summary,
+                diagnostic.severity.label()
+            ))
+        });
+
+        self.diagnostics = diagnostics;
+        let len = self.diagnostics.len();
+        let selected = if len == 0 {
+            None
+        } else {
+            Some(
+                self.diagnostics_state
+                    .selected()
+                    .unwrap_or(0)
+                    .min(len.saturating_sub(1)),
+            )
+        };
+        self.diagnostics_state.select(selected);
+        self.diagnostics_scroll_state = self
+            .diagnostics_scroll_state
+            .content_length(len)
+            .position(selected.unwrap_or(0));
+    }
+
+    fn storage_query(&self, jump_to: Option<String>) -> StorageQuery {
+        StorageQuery {
+            filter: (!self.storage_filter.trim().is_empty()).then(|| self.storage_filter.clone()),
+            jump_to,
+            page: self.storage_selected / self.storage_page_size.max(1),
+            page_size: self.storage_page_size.max(1),
+        }
+    }
+
+    fn storage_page(&self) -> crate::inspector::storage::StoragePage {
+        StorageInspector::build_page(&self.storage_entries, &self.storage_query(None))
+    }
+
+    fn storage_filtered_len(&self) -> usize {
+        self.storage_page().filtered_entries
+    }
+
+    fn set_storage_page_size(&mut self, page_size: usize) {
+        self.storage_page_size = page_size.max(1);
+        self.clamp_storage_selection();
+        self.sync_storage_scroll_state();
+    }
+
+    fn clamp_storage_selection(&mut self) {
+        let filtered_len = self.storage_filtered_len();
+        self.storage_selected = if filtered_len == 0 {
+            0
+        } else {
+            self.storage_selected.min(filtered_len.saturating_sub(1))
+        };
+        self.storage_state
+            .select((filtered_len > 0).then_some(self.storage_selected));
+    }
+
+    fn sync_storage_scroll_state(&mut self) {
+        let filtered_len = self.storage_filtered_len();
+        self.storage_scroll_state = self
+            .storage_scroll_state
+            .content_length(filtered_len)
+            .position(self.storage_selected);
+        self.storage_state
+            .select((filtered_len > 0).then_some(self.storage_selected));
+    }
+
+    fn move_storage_selection(&mut self, delta: isize) {
+        let filtered_len = self.storage_filtered_len();
+        if filtered_len == 0 {
+            self.storage_selected = 0;
+        } else if delta.is_negative() {
+            self.storage_selected = self.storage_selected.saturating_sub(delta.unsigned_abs());
+        } else {
+            self.storage_selected =
+                (self.storage_selected + delta as usize).min(filtered_len.saturating_sub(1));
+        }
+        self.sync_storage_scroll_state();
+    }
+
+    fn move_storage_page(&mut self, delta: isize) {
+        let step = self.storage_page_size.max(1) as isize;
+        self.move_storage_selection(delta * step);
+    }
+
+    fn move_storage_to_boundary(&mut self, end: bool) {
+        let filtered_len = self.storage_filtered_len();
+        self.storage_selected = if end {
+            filtered_len.saturating_sub(1)
+        } else {
+            0
+        };
+        self.sync_storage_scroll_state();
+    }
+
+    fn open_storage_input(&mut self, mode: StorageInputMode) {
+        self.storage_input_mode = Some(mode);
+        self.storage_input_value = match mode {
+            StorageInputMode::Filter => self.storage_filter.clone(),
+            StorageInputMode::Jump => String::new(),
+        };
+    }
+
+    fn clear_storage_filter(&mut self) {
+        self.storage_filter.clear();
+        self.storage_input_mode = None;
+        self.storage_input_value.clear();
+        self.storage_selected = 0;
+        self.sync_storage_scroll_state();
+    }
+
+    fn handle_storage_input_key(&mut self, key: KeyEvent) -> bool {
+        let Some(mode) = self.storage_input_mode else {
+            return false;
+        };
+
+        match key.code {
+            KeyCode::Esc => {
+                self.storage_input_mode = None;
+                self.storage_input_value.clear();
+            }
+            KeyCode::Enter => {
+                let value = self.storage_input_value.trim().to_string();
+                match mode {
+                    StorageInputMode::Filter => {
+                        self.storage_filter = value;
+                        self.storage_selected = 0;
+                    }
+                    StorageInputMode::Jump => {
+                        let page = StorageInspector::build_page(
+                            &self.storage_entries,
+                            &StorageQuery {
+                                filter: (!self.storage_filter.trim().is_empty())
+                                    .then(|| self.storage_filter.clone()),
+                                jump_to: Some(value),
+                                page: 0,
+                                page_size: self.storage_page_size.max(1),
+                            },
+                        );
+                        if let Some(index) = page.jump_match_index {
+                            self.storage_selected = index;
+                        }
+                    }
+                }
+                self.storage_input_mode = None;
+                self.storage_input_value.clear();
+                self.sync_storage_scroll_state();
+            }
+            KeyCode::Backspace => {
+                self.storage_input_value.pop();
+            }
+            KeyCode::Char(c) if !key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.storage_input_value.push(c);
+            }
+            _ => {}
+        }
+
+        true
     }
 
     // ── Step action ──────────────────────────────────────────────────────────
@@ -386,14 +617,7 @@ impl DashboardApp {
                 self.call_stack_state.select(Some((sel + 1).min(len - 1)));
             }
             ActivePane::Storage => {
-                let len = self.storage_entries.len();
-                if len == 0 {
-                    return;
-                }
-                let sel = self.storage_state.selected().unwrap_or(0);
-                let new_sel = (sel + 1).min(len - 1);
-                self.storage_state.select(Some(new_sel));
-                self.storage_scroll_state = self.storage_scroll_state.position(new_sel);
+                self.move_storage_selection(1);
             }
             ActivePane::Log => {
                 let len = self.log_entries.len();
@@ -401,6 +625,16 @@ impl DashboardApp {
                 self.log_scroll_state = self.log_scroll_state.position(self.log_scroll);
             }
             ActivePane::Budget => {}
+            ActivePane::Diagnostics => {
+                let len = self.diagnostics.len();
+                if len == 0 {
+                    return;
+                }
+                let sel = self.diagnostics_state.selected().unwrap_or(0);
+                let new_sel = (sel + 1).min(len - 1);
+                self.diagnostics_state.select(Some(new_sel));
+                self.diagnostics_scroll_state = self.diagnostics_scroll_state.position(new_sel);
+            }
         }
     }
 
@@ -412,16 +646,19 @@ impl DashboardApp {
                 self.call_stack_state.select(Some(sel.saturating_sub(1)));
             }
             ActivePane::Storage => {
-                let sel = self.storage_state.selected().unwrap_or(0);
-                let new_sel = sel.saturating_sub(1);
-                self.storage_state.select(Some(new_sel));
-                self.storage_scroll_state = self.storage_scroll_state.position(new_sel);
+                self.move_storage_selection(-1);
             }
             ActivePane::Log => {
                 self.log_scroll = self.log_scroll.saturating_sub(1);
                 self.log_scroll_state = self.log_scroll_state.position(self.log_scroll);
             }
             ActivePane::Budget => {}
+            ActivePane::Diagnostics => {
+                let sel = self.diagnostics_state.selected().unwrap_or(0);
+                let new_sel = sel.saturating_sub(1);
+                self.diagnostics_state.select(Some(new_sel));
+                self.diagnostics_scroll_state = self.diagnostics_scroll_state.position(new_sel);
+            }
         }
     }
 }
@@ -445,29 +682,29 @@ pub fn run_dashboard(engine: DebuggerEngine, function_name: &str) -> Result<()> 
     }
     // Setup terminal
     enable_raw_mode()
-        .map_err(|e| DebuggerError::FileError(format!("Failed to enable raw mode: {}", e)))?;
+        .map_err(|e| DebuggerError::IoError(format!("Failed to enable raw mode: {}", e)))?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture).map_err(|e| {
-        DebuggerError::FileError(format!("Failed to execute terminal command: {}", e))
+        DebuggerError::IoError(format!("Failed to execute terminal command: {}", e))
     })?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)
-        .map_err(|e| DebuggerError::FileError(format!("Failed to create terminal: {}", e)))?;
+        .map_err(|e| DebuggerError::IoError(format!("Failed to create terminal: {}", e)))?;
 
     let res = run_app(&mut terminal, engine, function_name);
 
     // Restore terminal
     disable_raw_mode()
-        .map_err(|e| DebuggerError::FileError(format!("Failed to disable raw mode: {}", e)))?;
+        .map_err(|e| DebuggerError::IoError(format!("Failed to disable raw mode: {}", e)))?;
     execute!(
         terminal.backend_mut(),
         LeaveAlternateScreen,
         DisableMouseCapture
     )
-    .map_err(|e| DebuggerError::FileError(format!("Failed to execute terminal command: {}", e)))?;
+    .map_err(|e| DebuggerError::IoError(format!("Failed to execute terminal command: {}", e)))?;
     terminal
         .show_cursor()
-        .map_err(|e| DebuggerError::FileError(format!("Failed to show cursor: {}", e)))?;
+        .map_err(|e| DebuggerError::IoError(format!("Failed to show cursor: {}", e)))?;
 
     if let Err(err) = res {
         tracing::error!("TUI error: {:?}", err);
@@ -481,14 +718,14 @@ fn run_dashboard_smoke(engine: DebuggerEngine, function_name: &str) -> Result<()
 
     let backend = TestBackend::new(120, 40);
     let mut terminal = Terminal::new(backend)
-        .map_err(|e| DebuggerError::FileError(format!("Failed to create terminal: {}", e)))?;
+        .map_err(|e| DebuggerError::IoError(format!("Failed to create terminal: {}", e)))?;
 
     let mut app = DashboardApp::new(engine, function_name.to_string());
     app.do_continue();
 
     terminal
         .draw(|f| ui(f, &mut app))
-        .map_err(|e| DebuggerError::FileError(format!("Failed to draw terminal: {}", e)))?;
+        .map_err(|e| DebuggerError::IoError(format!("Failed to draw terminal: {}", e)))?;
 
     Ok(())
 }
@@ -505,21 +742,25 @@ fn run_app<B: ratatui::backend::Backend>(
     loop {
         terminal
             .draw(|f| ui(f, &mut app))
-            .map_err(|e| DebuggerError::FileError(format!("Failed to draw terminal: {}", e)))?;
+            .map_err(|e| DebuggerError::IoError(format!("Failed to draw terminal: {}", e)))?;
 
         let timeout = tick_rate
             .checked_sub(last_tick.elapsed())
             .unwrap_or_default();
 
         if event::poll(timeout)
-            .map_err(|e| DebuggerError::FileError(format!("Failed to poll event: {}", e)))?
+            .map_err(|e| DebuggerError::IoError(format!("Failed to poll event: {}", e)))?
         {
             if let Event::Key(key) = event::read()
-                .map_err(|e| DebuggerError::FileError(format!("Failed to read event: {}", e)))?
+                .map_err(|e| DebuggerError::IoError(format!("Failed to read event: {}", e)))?
             {
                 // Ctrl-C always exits
                 if key.modifiers == KeyModifiers::CONTROL && key.code == KeyCode::Char('c') {
                     return Ok(());
+                }
+
+                if app.handle_storage_input_key(key) {
+                    continue;
                 }
 
                 match key.code {
@@ -543,6 +784,7 @@ fn run_app<B: ratatui::backend::Backend>(
                     KeyCode::Char('3') => app.active_pane = ActivePane::Storage,
                     KeyCode::Char('4') => app.active_pane = ActivePane::Budget,
                     KeyCode::Char('5') => app.active_pane = ActivePane::Log,
+                    KeyCode::Char('6') => app.active_pane = ActivePane::Diagnostics,
 
                     // ── Scroll ────────────────────────────────────
                     KeyCode::Down | KeyCode::Char('j') => {
@@ -553,6 +795,27 @@ fn run_app<B: ratatui::backend::Backend>(
                     }
 
                     // ── Debugger actions ──────────────────────────
+                    KeyCode::PageDown if app.active_pane == ActivePane::Storage => {
+                        app.move_storage_page(1);
+                    }
+                    KeyCode::PageUp if app.active_pane == ActivePane::Storage => {
+                        app.move_storage_page(-1);
+                    }
+                    KeyCode::Home if app.active_pane == ActivePane::Storage => {
+                        app.move_storage_to_boundary(false);
+                    }
+                    KeyCode::End if app.active_pane == ActivePane::Storage => {
+                        app.move_storage_to_boundary(true);
+                    }
+                    KeyCode::Char('/') if app.active_pane == ActivePane::Storage => {
+                        app.open_storage_input(StorageInputMode::Filter);
+                    }
+                    KeyCode::Char('g') if app.active_pane == ActivePane::Storage => {
+                        app.open_storage_input(StorageInputMode::Jump);
+                    }
+                    KeyCode::Char('x') | KeyCode::Esc if app.active_pane == ActivePane::Storage => {
+                        app.clear_storage_filter();
+                    }
                     KeyCode::Char('s') | KeyCode::Char('S') => {
                         app.do_step();
                     }
@@ -658,32 +921,67 @@ fn render_header(f: &mut Frame, app: &DashboardApp, area: Rect) {
 
 // ─── Body (4 panes) ─────────────────────────────────────────────────────
 fn render_body(f: &mut Frame, app: &mut DashboardApp, area: Rect) {
-    // Split body into left column (top=call stack, bottom=budget) and right column
-    // (top=execution, middle=storage, bottom=log)
-    let columns = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(35), Constraint::Percentage(65)])
-        .split(area);
+    if area.width >= 150 {
+        let columns = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Percentage(28),
+                Constraint::Percentage(47),
+                Constraint::Percentage(25),
+            ])
+            .split(area);
 
-    let left_column = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-        .split(columns[0]);
+        let left_column = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+            .split(columns[0]);
 
-    let right_column = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(7),
-            Constraint::Percentage(45),
-            Constraint::Percentage(55),
-        ])
-        .split(columns[1]);
+        let center_column = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(7),
+                Constraint::Percentage(45),
+                Constraint::Percentage(55),
+            ])
+            .split(columns[1]);
 
-    render_call_stack(f, app, left_column[0]);
-    render_budget(f, app, left_column[1]);
-    render_execution(f, app, right_column[0]);
-    render_storage(f, app, right_column[1]);
-    render_log(f, app, right_column[2]);
+        render_call_stack(f, app, left_column[0]);
+        render_budget(f, app, left_column[1]);
+        render_execution(f, app, center_column[0]);
+        render_storage(f, app, center_column[1]);
+        render_log(f, app, center_column[2]);
+        render_diagnostics(f, app, columns[2]);
+    } else {
+        let columns = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(38), Constraint::Percentage(62)])
+            .split(area);
+
+        let left_column = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Percentage(38),
+                Constraint::Percentage(27),
+                Constraint::Percentage(35),
+            ])
+            .split(columns[0]);
+
+        let right_column = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(7),
+                Constraint::Percentage(45),
+                Constraint::Percentage(55),
+            ])
+            .split(columns[1]);
+
+        render_call_stack(f, app, left_column[0]);
+        render_budget(f, app, left_column[1]);
+        render_diagnostics(f, app, left_column[2]);
+        render_execution(f, app, right_column[0]);
+        render_storage(f, app, right_column[1]);
+        render_log(f, app, right_column[2]);
+    }
 }
 
 // ─── Call Stack pane ──────────────────────────────────────────────────────
@@ -741,6 +1039,28 @@ fn render_execution(f: &mut Frame, app: &mut DashboardApp, area: Rect) {
             Span::styled(arg_text, Style::default().fg(COLOR_TEXT)),
         ]),
     ];
+
+    // Show paused file/line if available
+    if paused {
+        if let Some(reason) = app.engine.pause_reason_label() {
+            lines.push(Line::from(vec![
+                Span::styled("Pause reason: ", Style::default().fg(COLOR_TEXT_DIM)),
+                Span::styled(reason, Style::default().fg(COLOR_YELLOW)),
+            ]));
+        }
+        if let Some(loc) = app.engine.current_source_location() {
+            let file = loc.file.display();
+            let line = loc.line;
+            let col = loc.column.map(|c| format!(":{}", c)).unwrap_or_default();
+            lines.push(Line::from(vec![
+                Span::styled("Paused at: ", Style::default().fg(COLOR_TEXT_DIM)),
+                Span::styled(
+                    format!("{}:{}{}", file, line, col),
+                    Style::default().fg(COLOR_YELLOW),
+                ),
+            ]));
+        }
+    }
 
     if let Some(result) = &app.last_result {
         lines.push(Line::from(vec![
@@ -840,11 +1160,62 @@ fn render_call_stack(f: &mut Frame, app: &mut DashboardApp, area: Rect) {
 fn render_storage(f: &mut Frame, app: &mut DashboardApp, area: Rect) {
     let is_active = app.active_pane == ActivePane::Storage;
     let count = app.storage_entries.len();
-    let title = format!("  Storage  ({} entries)", count);
+    let matched = app.storage_filtered_len();
+    let title = if app.storage_filter.trim().is_empty() {
+        format!("  Storage  ({} entries)", count)
+    } else {
+        format!("  Storage  ({} / {} entries)", matched, count)
+    };
     let block = pane_block(&title, "3", is_active);
 
     let inner = block.inner(area);
     f.render_widget(block, area);
+
+    if inner.height == 0 || inner.width == 0 {
+        return;
+    }
+
+    let header_rows = if inner.height > 2 { 2 } else { 1 };
+    let sections = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(header_rows), Constraint::Min(0)])
+        .split(inner);
+    let list_region = sections[1];
+
+    app.set_storage_page_size(list_region.height.max(1) as usize);
+    let page = app.storage_page();
+    let summary = if page.filtered_entries == 0 {
+        "  No matching storage entries".to_string()
+    } else {
+        format!(
+            "  Page {}/{}  showing {}-{} of {}",
+            page.page + 1,
+            page.total_pages,
+            page.page_start + 1,
+            page.page_start + page.entries.len(),
+            page.filtered_entries
+        )
+    };
+    let filter_line = if app.storage_filter.trim().is_empty() {
+        "  /=filter  g=jump  PgUp/PgDn=page  Home/End=edges  x=clear".to_string()
+    } else {
+        format!(
+            "  filter={}  /=edit  g=jump  PgUp/PgDn=page  x=clear",
+            truncate(
+                &app.storage_filter,
+                sections[0].width.saturating_sub(10) as usize
+            )
+        )
+    };
+    let meta = Paragraph::new(vec![
+        Line::from(Span::styled(summary, Style::default().fg(COLOR_TEXT_DIM))),
+        Line::from(Span::styled(
+            filter_line,
+            Style::default().fg(COLOR_TEXT_DIM),
+        )),
+    ])
+    .style(Style::default().bg(COLOR_SURFACE));
+    f.render_widget(meta, sections[0]);
 
     if app.storage_entries.is_empty() {
         let msg = Paragraph::new(Line::from(vec![Span::styled(
@@ -853,21 +1224,39 @@ fn render_storage(f: &mut Frame, app: &mut DashboardApp, area: Rect) {
         )]))
         .style(Style::default().bg(COLOR_SURFACE))
         .wrap(Wrap { trim: false });
-        f.render_widget(msg, inner);
+        f.render_widget(msg, list_region);
         return;
     }
 
-    let items: Vec<ListItem> = app
-        .storage_entries
+    if page.entries.is_empty() {
+        let msg = Paragraph::new(Line::from(vec![Span::styled(
+            "  (no storage entries match the current filter)",
+            Style::default().fg(COLOR_TEXT_DIM),
+        )]))
+        .style(Style::default().bg(COLOR_SURFACE))
+        .wrap(Wrap { trim: false });
+        f.render_widget(msg, list_region);
+        if let Some(mode) = app.storage_input_mode {
+            render_storage_prompt(f, area, mode, &app.storage_input_value);
+        }
+        return;
+    }
+
+    let items: Vec<ListItem> = page
+        .entries
         .iter()
-        .map(|(k, v)| {
+        .enumerate()
+        .map(|(offset, (k, v))| {
             // Truncate long keys/values to fit
-            let max_key = (inner.width as usize).saturating_sub(6).min(25);
-            let max_val = (inner.width as usize).saturating_sub(max_key + 6);
+            let max_key = (list_region.width as usize).saturating_sub(14).min(32);
+            let max_val = (list_region.width as usize).saturating_sub(max_key + 12);
             let key_display = truncate(k, max_key);
             let val_display = truncate(v, max_val);
             ListItem::new(Line::from(vec![
-                Span::styled(" ", Style::default()),
+                Span::styled(
+                    format!("{:>4} ", page.page_start + offset + 1),
+                    Style::default().fg(COLOR_TEXT_DIM),
+                ),
                 Span::styled(
                     key_display,
                     Style::default().fg(COLOR_CYAN).add_modifier(Modifier::BOLD),
@@ -888,14 +1277,14 @@ fn render_storage(f: &mut Frame, app: &mut DashboardApp, area: Rect) {
 
     // Scrollbar area
     let scroll_area = Rect {
-        x: inner.x + inner.width.saturating_sub(1),
-        y: inner.y,
+        x: list_region.x + list_region.width.saturating_sub(1),
+        y: list_region.y,
         width: 1,
-        height: inner.height,
+        height: list_region.height,
     };
     let list_area = Rect {
-        width: inner.width.saturating_sub(1),
-        ..inner
+        width: list_region.width.saturating_sub(1),
+        ..list_region
     };
 
     f.render_stateful_widget(list, list_area, &mut app.storage_state);
@@ -907,9 +1296,53 @@ fn render_storage(f: &mut Frame, app: &mut DashboardApp, area: Rect) {
         scroll_area,
         &mut app.storage_scroll_state,
     );
+
+    if let Some(mode) = app.storage_input_mode {
+        render_storage_prompt(f, area, mode, &app.storage_input_value);
+    }
 }
 
 // ─── Budget pane ──────────────────────────────────────────────────────────
+fn render_storage_prompt(f: &mut Frame, area: Rect, mode: StorageInputMode, input: &str) {
+    let popup_width = 64u16.min(area.width.saturating_sub(4));
+    let popup_height = 5u16.min(area.height.saturating_sub(2));
+    let x = area.x + area.width.saturating_sub(popup_width) / 2;
+    let y = area.y + area.height.saturating_sub(popup_height) / 2;
+    let popup = Rect::new(x, y, popup_width, popup_height);
+    let title = match mode {
+        StorageInputMode::Filter => " Storage Filter ",
+        StorageInputMode::Jump => " Jump To Key ",
+    };
+    let hint = match mode {
+        StorageInputMode::Filter => "Type a substring, prefix*, or re:pattern. Enter applies.",
+        StorageInputMode::Jump => "Type a key or prefix. Enter jumps to the first match.",
+    };
+
+    let widget = Paragraph::new(vec![
+        Line::from(Span::styled(hint, Style::default().fg(COLOR_TEXT_DIM))),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled("> ", Style::default().fg(COLOR_ACCENT)),
+            Span::styled(input.to_string(), Style::default().fg(COLOR_TEXT)),
+        ]),
+    ])
+    .block(
+        Block::default()
+            .title(Span::styled(
+                title,
+                Style::default()
+                    .fg(COLOR_ACCENT)
+                    .add_modifier(Modifier::BOLD),
+            ))
+            .borders(Borders::ALL)
+            .border_type(BorderType::Double)
+            .border_style(Style::default().fg(COLOR_ACCENT))
+            .style(Style::default().bg(COLOR_SURFACE)),
+    );
+
+    f.render_widget(widget, popup);
+}
+
 fn render_budget(f: &mut Frame, app: &DashboardApp, area: Rect) {
     let is_active = app.active_pane == ActivePane::Budget;
     let block = pane_block("  Budget Meters", "4", is_active);
@@ -1129,6 +1562,103 @@ fn render_log(f: &mut Frame, app: &mut DashboardApp, area: Rect) {
 }
 
 // ─── Status bar ───────────────────────────────────────────────────────────
+fn render_diagnostics(f: &mut Frame, app: &mut DashboardApp, area: Rect) {
+    let is_active = app.active_pane == ActivePane::Diagnostics;
+    let title = format!("  Diagnostics  ({} active)", app.diagnostics.len());
+    let block = pane_block(&title, "6", is_active);
+    let inner = block.inner(area);
+    f.render_widget(block, area);
+
+    if app.diagnostics.is_empty() {
+        let msg = Paragraph::new(vec![
+            Line::from(Span::styled(
+                "  No active diagnostics.",
+                Style::default().fg(COLOR_GREEN),
+            )),
+            Line::from(Span::styled(
+                "  Warnings and notices will appear here.",
+                Style::default().fg(COLOR_TEXT_DIM),
+            )),
+        ])
+        .wrap(Wrap { trim: false });
+        f.render_widget(msg, inner);
+        return;
+    }
+
+    let items: Vec<ListItem> = app
+        .diagnostics
+        .iter()
+        .map(|diagnostic| {
+            let severity_color = match diagnostic.severity {
+                crate::output::DiagnosticSeverity::Notice => COLOR_ACCENT,
+                crate::output::DiagnosticSeverity::Warning => COLOR_YELLOW,
+                crate::output::DiagnosticSeverity::Error => COLOR_RED,
+            };
+
+            let mut lines = vec![
+                Line::from(vec![
+                    Span::styled(
+                        format!(" {} ", diagnostic.severity.label()),
+                        Style::default()
+                            .fg(Color::Black)
+                            .bg(severity_color)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    Span::raw(" "),
+                    Span::styled(
+                        diagnostic.source.to_uppercase(),
+                        Style::default()
+                            .fg(COLOR_TEXT_DIM)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                ]),
+                Line::from(Span::styled(
+                    format!(" {}", diagnostic.summary),
+                    Style::default().fg(COLOR_TEXT),
+                )),
+            ];
+
+            if let Some(detail) = &diagnostic.detail {
+                lines.push(Line::from(Span::styled(
+                    format!(" {}", detail),
+                    Style::default().fg(COLOR_TEXT_DIM),
+                )));
+            }
+
+            ListItem::new(lines)
+        })
+        .collect();
+
+    let list = List::new(items)
+        .highlight_style(
+            Style::default()
+                .bg(Color::Rgb(45, 50, 72))
+                .add_modifier(Modifier::BOLD),
+        )
+        .highlight_symbol("â–¶ ");
+
+    let scroll_area = Rect {
+        x: inner.x + inner.width.saturating_sub(1),
+        y: inner.y,
+        width: 1,
+        height: inner.height,
+    };
+    let list_area = Rect {
+        width: inner.width.saturating_sub(1),
+        ..inner
+    };
+
+    f.render_stateful_widget(list, list_area, &mut app.diagnostics_state);
+    f.render_stateful_widget(
+        Scrollbar::new(ScrollbarOrientation::VerticalRight)
+            .begin_symbol(Some("â†‘"))
+            .end_symbol(Some("â†“"))
+            .style(Style::default().fg(COLOR_BORDER)),
+        scroll_area,
+        &mut app.diagnostics_scroll_state,
+    );
+}
+
 fn render_status_bar(f: &mut Frame, app: &DashboardApp, area: Rect) {
     let active_label = app.active_pane.label();
     let (msg, msg_color) = if let Some((ref s, kind)) = app.status_message {

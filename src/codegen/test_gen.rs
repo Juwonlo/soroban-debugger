@@ -122,6 +122,7 @@ impl TestGenerator {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::output::InvocationReason;
     use soroban_env_host::xdr::ScVal;
     use std::collections::HashMap;
     use tempfile::tempdir;
@@ -130,6 +131,7 @@ mod tests {
     fn test_generate_code() {
         let record = ExecutionRecord {
             function: "add".to_string(),
+            invocation_reason: InvocationReason::Entrypoint,
             args: vec![ScVal::U32(10), ScVal::U32(20)],
             result: Ok(ScVal::U32(30)),
             budget: crate::inspector::budget::BudgetInfo {

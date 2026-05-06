@@ -1,0 +1,22 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH history-prune 1  "history-prune " 
+.SH NAME
+history\-prune \- Prune or compact run history according to a retention policy
+.SH SYNOPSIS
+\fBhistory\-prune\fR [\fB\-\-max\-records\fR] [\fB\-\-max\-age\-days\fR] [\fB\-\-dry\-run\fR] [\fB\-h\fR|\fB\-\-help\fR] 
+.SH DESCRIPTION
+Prune or compact run history according to a retention policy
+.SH OPTIONS
+.TP
+\fB\-\-max\-records\fR \fI<COUNT>\fR
+Keep only the N most\-recent records
+.TP
+\fB\-\-max\-age\-days\fR \fI<DAYS>\fR
+Drop records older than N days
+.TP
+\fB\-\-dry\-run\fR
+Print what would be removed without actually deleting anything
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help

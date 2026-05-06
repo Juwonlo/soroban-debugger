@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use soroban_env_common::xdr::ScErrorType;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -26,80 +27,10 @@ impl ErrorDatabase {
     }
 
     fn init_standard_errors(&mut self) {
-        let std_errs = [
-            (
-                1,
-                "UnknownError",
-                "An unknown error occurred during contract execution",
-                "Unhandled exception or unexpected state",
-                "Check contract logic for unhandled edge cases or add error handling",
-            ),
-            (
-                2,
-                "HostError",
-                "Error from the Soroban host environment",
-                "Host operation failed (e.g., storage, budget exceeded)",
-                "Check budget limits, storage access, or host resource constraints",
-            ),
-            (
-                3,
-                "ConversionError",
-                "Failed to convert between value types",
-                "Type mismatch or invalid value format",
-                "Verify argument types match function signature and value formats are correct",
-            ),
-            (
-                4,
-                "StorageError",
-                "Storage operation failed",
-                "Storage key not found, access denied, or storage limit exceeded",
-                "Check storage key existence, permissions, and storage budget limits",
-            ),
-            (
-                5,
-                "BudgetError",
-                "CPU or memory budget exceeded",
-                "Contract execution consumed too many CPU instructions or memory bytes",
-                "Optimize contract code, reduce loop iterations, or use more efficient algorithms",
-            ),
-            (
-                6,
-                "AuthError",
-                "Authorization check failed",
-                "Missing required authorization or insufficient permissions",
-                "Ensure proper authorization is provided before calling the function",
-            ),
-            (
-                7,
-                "MathError",
-                "Mathematical operation failed",
-                "Division by zero, overflow, or invalid mathematical operation",
-                "Add bounds checking, validate inputs, and handle edge cases in math operations",
-            ),
-            (
-                8,
-                "ArrayError",
-                "Array operation failed",
-                "Index out of bounds, invalid array access, or array size exceeded",
-                "Validate array indices before access and check array bounds",
-            ),
-            (
-                9,
-                "StringError",
-                "String operation failed",
-                "Invalid string encoding, length exceeded, or malformed string",
-                "Validate string encoding and length before operations",
-            ),
-            (
-                10,
-                "MapError",
-                "Map operation failed",
-                "Key not found, invalid key type, or map operation failed",
-                "Check if key exists before access and validate key types",
-            ),
-        ];
-
-        for (code, name, desc, cause, fix) in std_errs {
+        for error_type in ScErrorType::VARIANTS {
+            let (desc, cause, fix) = standard_error_metadata(error_type);
+            let code = error_type as u32;
+            let name = error_type.name();
             self.standard_errors.insert(
                 code,
                 ErrorExplanation {
@@ -139,50 +70,30 @@ impl ErrorDatabase {
         Ok(())
     }
 
-    pub fn display_error(&self, code: u32) {
+    pub fn format_error(&self, code: u32) -> String {
+        let mut output = String::new();
         if let Some(explanation) = self.lookup(code) {
-            crate::logging::log_display(
-                "\n=== Error Explanation ===",
-                crate::logging::LogLevel::Info,
-            );
-            crate::logging::log_display(
-                format!("Error Code: {}", explanation.code),
-                crate::logging::LogLevel::Info,
-            );
-            crate::logging::log_display(
-                format!("Error Name: {}", explanation.name),
-                crate::logging::LogLevel::Info,
-            );
-            crate::logging::log_display("\nDescription:", crate::logging::LogLevel::Info);
-            crate::logging::log_display(
-                format!("  {}", explanation.description),
-                crate::logging::LogLevel::Info,
-            );
-            crate::logging::log_display("\nCommon Cause:", crate::logging::LogLevel::Info);
-            crate::logging::log_display(
-                format!("  {}", explanation.common_cause),
-                crate::logging::LogLevel::Info,
-            );
-            crate::logging::log_display("\nSuggested Fix:", crate::logging::LogLevel::Info);
-            crate::logging::log_display(
-                format!("  {}", explanation.suggested_fix),
-                crate::logging::LogLevel::Info,
-            );
-            crate::logging::log_display("", crate::logging::LogLevel::Info);
+            output.push_str("\n=== Error Explanation ===\n");
+            output.push_str(&format!("Error Code: {}\n", explanation.code));
+            output.push_str(&format!("Error Name: {}\n", explanation.name));
+            output.push_str("\nDescription:\n");
+            output.push_str(&format!("  {}\n", explanation.description));
+            output.push_str("\nCommon Cause:\n");
+            output.push_str(&format!("  {}\n", explanation.common_cause));
+            output.push_str("\nSuggested Fix:\n");
+            output.push_str(&format!("  {}\n", explanation.suggested_fix));
         } else {
-            crate::logging::log_display(
-                format!("\n=== Error Code: {} ===", code),
-                crate::logging::LogLevel::Info,
-            );
-            crate::logging::log_display(
-                "No explanation available for this error code.",
-                crate::logging::LogLevel::Info,
-            );
-            crate::logging::log_display(
-                "This may be a custom contract error. Check contract documentation.",
-                crate::logging::LogLevel::Info,
-            );
-            crate::logging::log_display("", crate::logging::LogLevel::Info);
+            output.push_str(&format!("\n=== Error Code: {} ===\n", code));
+            output.push_str("No explanation available for this error code.\n");
+            output.push_str("This may be a custom contract error. Check contract documentation.\n");
+        }
+        output
+    }
+
+    pub fn display_error(&self, code: u32) {
+        let formatted = self.format_error(code);
+        for line in formatted.lines() {
+            crate::logging::log_display(line, crate::logging::LogLevel::Info);
         }
     }
 }
@@ -193,6 +104,61 @@ impl Default for ErrorDatabase {
     }
 }
 
+fn standard_error_metadata(error_type: ScErrorType) -> (&'static str, &'static str, &'static str) {
+    match error_type {
+        ScErrorType::Contract => (
+            "Contract-defined error code returned from contract logic",
+            "The contract intentionally returned a user-defined error (e.g. `panic_with_error!`)",
+            "Inspect the contract's custom error enum/documentation and validate business rules",
+        ),
+        ScErrorType::WasmVm => (
+            "WASM VM trap or runtime validation error",
+            "Invalid WASM action, bounds violation, or VM/runtime trap",
+            "Check contract bytecode assumptions, index bounds, and runtime preconditions",
+        ),
+        ScErrorType::Context => (
+            "Host context operation failed",
+            "Invalid host context state or exceeded context limits",
+            "Verify call context assumptions and ensure host context limits are respected",
+        ),
+        ScErrorType::Storage => (
+            "Storage operation failed in the Soroban host",
+            "Missing key, invalid storage access pattern, or storage-layer constraint failure",
+            "Validate key existence/access paths and review storage durability and limits",
+        ),
+        ScErrorType::Object => (
+            "Host object operation failed",
+            "Invalid object handle/type or object lifecycle misuse",
+            "Ensure object values are valid for the operation and not stale or mismatched",
+        ),
+        ScErrorType::Crypto => (
+            "Cryptographic operation failed",
+            "Invalid signature/hash input, malformed key material, or unsupported crypto action",
+            "Validate key formats and inputs, then re-check signature/hash expectations",
+        ),
+        ScErrorType::Events => (
+            "Event emission failed",
+            "Invalid event payload/topic shape or host event constraints were violated",
+            "Verify event topic/data schema and ensure payload sizes/types are valid",
+        ),
+        ScErrorType::Budget => (
+            "Execution budget was exceeded",
+            "CPU instruction or memory budget limit reached during execution",
+            "Optimize execution path, reduce allocations/loops, or increase available budget",
+        ),
+        ScErrorType::Value => (
+            "Host value conversion/validation failed",
+            "Type mismatch, invalid SCVal shape, or unsupported value conversion",
+            "Validate argument and return-value types against the contract interface",
+        ),
+        ScErrorType::Auth => (
+            "Authorization subsystem rejected the operation",
+            "Missing/invalid authorization or failed authorization checks",
+            "Provide required auth entries and verify signer/permission expectations",
+        ),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -200,12 +166,33 @@ mod tests {
     #[test]
     fn test_standard_error_lookup() {
         let db = ErrorDatabase::new();
-        let auth_error = db.lookup(6).expect("Should find standard AuthError");
-        assert_eq!(auth_error.name, "AuthError");
-        assert_eq!(auth_error.code, 6);
+        let wasm_vm = db
+            .lookup(ScErrorType::WasmVm as u32)
+            .expect("Should find WasmVm");
+        assert_eq!(wasm_vm.name, "WasmVm");
+        assert_eq!(wasm_vm.code, ScErrorType::WasmVm as u32);
+
+        let context = db
+            .lookup(ScErrorType::Context as u32)
+            .expect("Should find Context");
+        assert_eq!(context.name, "Context");
 
         let missing = db.lookup(999);
         assert!(missing.is_none());
+    }
+
+    #[test]
+    fn test_standard_error_table_covers_all_sc_error_types() {
+        let db = ErrorDatabase::new();
+
+        for error_type in ScErrorType::VARIANTS {
+            let code = error_type as u32;
+            let explanation = db
+                .lookup(code)
+                .unwrap_or_else(|| panic!("Missing standard error entry for code {}", code));
+            assert_eq!(explanation.name, error_type.name());
+            assert_eq!(explanation.code, code);
+        }
     }
 
     #[test]

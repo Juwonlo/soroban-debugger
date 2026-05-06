@@ -2,10 +2,428 @@
 //!
 //! Supports `NO_COLOR` (disable ANSI colors) and `--no-unicode` (ASCII-only output).
 
+use serde::{Deserialize, Serialize};
+use std::fmt::Write;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 static NO_UNICODE: AtomicBool = AtomicBool::new(false);
 static COLORS_ENABLED: AtomicBool = AtomicBool::new(true);
+pub const SCHEMA_VERSION: &str = "1.0.0";
+
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum OutputStatus {
+    Success,
+    Error,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum DiagnosticSeverity {
+    Notice,
+    Warning,
+    Error,
+}
+
+impl DiagnosticSeverity {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Notice => "NOTICE",
+            Self::Warning => "WARN",
+            Self::Error => "ERROR",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct DiagnosticRecord {
+    pub source: String,
+    pub summary: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
+    pub severity: DiagnosticSeverity,
+}
+
+impl DiagnosticRecord {
+    pub fn new(
+        source: impl Into<String>,
+        summary: impl Into<String>,
+        detail: Option<String>,
+        severity: DiagnosticSeverity,
+    ) -> Self {
+        Self {
+            source: source.into(),
+            summary: summary.into(),
+            detail,
+            severity,
+        }
+    }
+
+    pub fn display_line(&self) -> String {
+        match &self.detail {
+            Some(detail) if !detail.is_empty() => format!(
+                "[{}] {}: {} ({})",
+                self.severity.label(),
+                self.source,
+                self.summary,
+                detail
+            ),
+            _ => format!(
+                "[{}] {}: {}",
+                self.severity.label(),
+                self.source,
+                self.summary
+            ),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct OutputError {
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum PluginIncidentType {
+    Panic,
+    Timeout,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, serde::Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum InvocationReason {
+    Entrypoint,
+    CrossContract,
+    Replay,
+    Plugin,
+}
+
+impl InvocationReason {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Entrypoint => "entrypoint",
+            Self::CrossContract => "cross_contract",
+            Self::Replay => "replay",
+            Self::Plugin => "plugin",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, serde::Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ReplayArtifactKind {
+    Manifest,
+    Trace,
+    ContractWasm,
+    NetworkSnapshot,
+    StorageImport,
+    StorageExport,
+    OutputReport,
+    GeneratedTest,
+}
+
+#[derive(Debug, Clone, Serialize, serde::Deserialize, PartialEq, Eq)]
+pub struct ReplayArtifactFile {
+    pub kind: ReplayArtifactKind,
+    pub path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub compression: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, serde::Deserialize, PartialEq, Eq)]
+pub struct ReplayArtifactManifest {
+    pub schema_version: String,
+    pub artifact_group: String,
+    pub created_at: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub contract: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub function: Option<String>,
+    pub files: Vec<ReplayArtifactFile>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct PluginIncidentReport {
+    pub plugin: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub plugin_version: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub library_path: Option<String>,
+    pub invocation_kind: String,
+    pub incident: PluginIncidentType,
+    pub action_taken: String,
+    pub core_debugger_status: String,
+    pub message: String,
+}
+
+impl PluginIncidentReport {
+    pub fn summary_line(&self) -> String {
+        format!(
+            "Plugin incident: '{}' {} during {}. Action: {}. Core debugger status: {}.",
+            self.plugin,
+            match self.incident {
+                PluginIncidentType::Panic => "panicked",
+                PluginIncidentType::Timeout => "timed out",
+            },
+            self.invocation_kind,
+            self.action_taken,
+            self.core_debugger_status
+        )
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, serde::Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum PluginReloadOutcome {
+    Success,
+    Failed,
+    RolledBack,
+}
+
+#[derive(Debug, Clone, Serialize, serde::Deserialize, PartialEq, Eq)]
+pub struct PluginReloadReport {
+    pub plugin: String,
+    pub timestamp: String,
+    pub outcome: PluginReloadOutcome,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub preserved_state_bytes: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+}
+
+impl PluginReloadReport {
+    pub fn summary_line(&self) -> String {
+        match self.outcome {
+            PluginReloadOutcome::Success => {
+                let size = self
+                    .preserved_state_bytes
+                    .map_or("unknown".to_string(), |b| format!("{} bytes", b));
+                format!(
+                    "Plugin '{}' reloaded successfully. Preserved state: {}.",
+                    self.plugin, size
+                )
+            }
+            PluginReloadOutcome::Failed => {
+                let reason = self.reason.as_deref().unwrap_or("unknown error");
+                format!("Plugin '{}' reload failed: {}.", self.plugin, reason)
+            }
+            PluginReloadOutcome::RolledBack => {
+                let reason = self.reason.as_deref().unwrap_or("unknown error");
+                format!(
+                    "Plugin '{}' reload rolled back. Reason: {}.",
+                    self.plugin, reason
+                )
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "snake_case")]
+pub enum BatchResultKind {
+    Passed,
+    Failed,
+    Panicked,
+    TimedOut,
+    Skipped,
+    Error,
+}
+
+impl BatchResultKind {
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::Passed => "Passed",
+            Self::Failed => "Failed",
+            Self::Panicked => "Panicked",
+            Self::TimedOut => "Timed Out",
+            Self::Skipped => "Skipped",
+            Self::Error => "Error",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BatchResult {
+    pub label: String,
+    pub kind: BatchResultKind,
+    pub args: String,
+    pub result: Option<String>,
+    pub expected: Option<String>,
+    pub error: Option<String>,
+    pub duration_ms: u128,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct BatchSummary {
+    pub total: usize,
+    pub passed: usize,
+    pub failed: usize,
+    pub panicked: usize,
+    pub timed_out: usize,
+    pub skipped: usize,
+    pub errors: usize,
+    pub total_duration_ms: u128,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BatchExecutionResult {
+    pub summary: BatchSummary,
+    pub results: Vec<BatchResult>,
+}
+
+pub fn collect_runtime_diagnostics(
+    source_map_loaded: bool,
+    budget: &crate::inspector::budget::BudgetInfo,
+    last_error: Option<&str>,
+) -> Vec<DiagnosticRecord> {
+    let mut diagnostics = Vec::new();
+
+    if !source_map_loaded {
+        diagnostics.push(DiagnosticRecord::new(
+            "source_map",
+            "Source locations are degraded for this session.",
+            Some(
+                "DWARF/source map data could not be loaded, so paused file and line hints may be unavailable."
+                    .to_string(),
+            ),
+            DiagnosticSeverity::Warning,
+        ));
+    }
+
+    for (resource, percentage) in [
+        ("CPU", budget.cpu_percentage()),
+        ("Memory", budget.memory_percentage()),
+    ] {
+        let severity = if percentage >= 90.0 {
+            Some(DiagnosticSeverity::Warning)
+        } else if percentage >= 70.0 {
+            Some(DiagnosticSeverity::Notice)
+        } else {
+            None
+        };
+
+        if let Some(severity) = severity {
+            let detail = if percentage >= 90.0 {
+                Some(format!(
+                    "{} usage is at {:.1}% of the configured limit. Consider reducing contract work or data size.",
+                    resource, percentage
+                ))
+            } else {
+                Some(format!(
+                    "{} usage is at {:.1}% of the configured limit.",
+                    resource, percentage
+                ))
+            };
+            diagnostics.push(DiagnosticRecord::new(
+                format!("budget/{}", resource.to_lowercase()),
+                format!("{} budget is running high.", resource),
+                detail,
+                severity,
+            ));
+        }
+    }
+
+    if let Some(error) = last_error.filter(|error| !error.trim().is_empty()) {
+        diagnostics.push(DiagnosticRecord::new(
+            "execution",
+            "The most recent debugger action failed.",
+            Some(error.to_string()),
+            DiagnosticSeverity::Error,
+        ));
+    }
+
+    diagnostics
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct VersionedOutput<T>
+where
+    T: Serialize,
+{
+    pub schema_version: &'static str,
+    pub command: String,
+    pub status: OutputStatus,
+    pub result: Option<T>,
+    pub error: Option<OutputError>,
+}
+
+impl<T> VersionedOutput<T>
+where
+    T: Serialize,
+{
+    pub fn success(command: impl Into<String>, result: T) -> Self {
+        Self {
+            schema_version: SCHEMA_VERSION,
+            command: command.into(),
+            status: OutputStatus::Success,
+            result: Some(result),
+            error: None,
+        }
+    }
+
+    pub fn error(command: impl Into<String>, message: impl Into<String>) -> Self {
+        Self {
+            schema_version: SCHEMA_VERSION,
+            command: command.into(),
+            status: OutputStatus::Error,
+            result: None,
+            error: Some(OutputError {
+                message: message.into(),
+            }),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct SymbolicReplayBundle {
+    pub schema_version: u8,
+    pub command: String,
+
+    pub contract: ContractInfo,
+    pub invocation: InvocationInfo,
+    pub config: ReplayConfig,
+
+    pub storage_seed: Option<StorageSeed>,
+    pub metadata: Option<ReplayMetadata>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ContractInfo {
+    pub sha256: String,
+    pub path_hint: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct InvocationInfo {
+    pub function: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ReplayConfig {
+    pub seed: Option<u64>,
+    pub max_paths: Option<usize>,
+    pub max_input_combinations: Option<usize>,
+    pub max_breadth: Option<usize>,
+    pub max_depth: Option<usize>,
+    pub timeout_secs: Option<u64>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct StorageSeed {
+    pub format: String,
+    pub data: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ReplayMetadata {
+    pub paths_explored: usize,
+    pub panics_found: usize,
+}
 
 /// Global output/accessibility configuration.
 pub struct OutputConfig;
@@ -158,5 +576,111 @@ impl OutputWriter {
                 .map_err(|e| miette::miette!("Failed to write to output file: {}", e))?;
         }
         Ok(())
+    }
+}
+
+/// Formats a resource usage timeline as a human-readable table.
+pub fn format_resource_timeline(
+    timeline: &[crate::inspector::budget::ResourceCheckpoint],
+) -> String {
+    let mut output = String::new();
+    let mut last_cpu = 0;
+    let mut last_mem = 0;
+
+    output.push_str("| Time | Location | Total CPU | CPU Delta | Total Mem | Mem Delta |\n");
+    output.push_str("|------|----------|-----------|-----------|-----------|-----------|\n");
+
+    for checkpoint in timeline {
+        let cpu_delta = checkpoint.cpu_instructions.saturating_sub(last_cpu);
+        let mem_delta = checkpoint.memory_bytes.saturating_sub(last_mem);
+
+        let _ = writeln!(
+            output,
+            "| {: >4}ms | {: <8} | {: >9} | {: >9} | {: >9} | {: >9} |",
+            checkpoint.timestamp_ms,
+            if checkpoint.location_name.len() > 8 {
+                &checkpoint.location_name[..8]
+            } else {
+                &checkpoint.location_name
+            },
+            checkpoint.cpu_instructions,
+            cpu_delta,
+            checkpoint.memory_bytes,
+            mem_delta
+        );
+
+        last_cpu = checkpoint.cpu_instructions;
+        last_mem = checkpoint.memory_bytes;
+    }
+    output
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_replay_bundle_serializes() {
+        let bundle = SymbolicReplayBundle {
+            schema_version: 1,
+            command: "symbolic".to_string(),
+            contract: ContractInfo {
+                sha256: "abc".to_string(),
+                path_hint: None,
+            },
+            invocation: InvocationInfo {
+                function: "test".to_string(),
+            },
+            config: ReplayConfig {
+                seed: Some(1),
+                max_paths: None,
+                max_input_combinations: None,
+                max_breadth: None,
+                max_depth: None,
+                timeout_secs: None,
+            },
+            storage_seed: None,
+            metadata: None,
+        };
+
+        let json = serde_json::to_string(&bundle).unwrap();
+        assert!(json.contains("schema_version"));
+        assert!(json.contains("symbolic"));
+    }
+
+    #[test]
+    fn test_replay_bundle_optional_fields_serialization() {
+        let bundle = SymbolicReplayBundle {
+            schema_version: 1,
+            command: "symbolic".to_string(),
+            contract: ContractInfo {
+                sha256: "abc".to_string(),
+                path_hint: Some("contract.wasm".to_string()),
+            },
+            invocation: InvocationInfo {
+                function: "test".to_string(),
+            },
+            config: ReplayConfig {
+                seed: None,
+                max_paths: Some(10),
+                max_input_combinations: Some(20),
+                max_breadth: Some(2),
+                max_depth: Some(3),
+                timeout_secs: Some(30),
+            },
+            storage_seed: Some(StorageSeed {
+                format: "json".to_string(),
+                data: "{}".to_string(),
+            }),
+            metadata: Some(ReplayMetadata {
+                paths_explored: 5,
+                panics_found: 1,
+            }),
+        };
+
+        let json = serde_json::to_string(&bundle).unwrap();
+        assert!(json.contains("storage_seed"));
+        assert!(json.contains("metadata"));
+        assert!(json.contains("contract.wasm"));
     }
 }

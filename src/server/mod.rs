@@ -1,3 +1,5 @@
+//! Canonical remote debug server exports.
+
 pub mod debug_server;
 pub mod protocol;
 

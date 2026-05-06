@@ -19,13 +19,27 @@ Soroban contracts are compiled from Rust to WebAssembly (WASM). While debugging 
 - **DWARF Support**: Full support for standard DWARF embedded in WASM.
 - **Source Line Stepping**: Integrated into the stepping logic.
 - **Caching**: Performance optimized with file and mapping caches.
-- **Fallback**: Graceful fallback to WASM-only view if debug info is missing or stripped.
+- **Fallback & Diagnostics**: Graceful fallback to WASM-only view if debug info is missing or stripped. When DWARF metadata is partially malformed, `SourceMap::load` continues to extract valid data and surfaces parsing errors as warnings (`SourceMapDiagnostic`) rather than completely aborting. These diagnostics can be reviewed using `inspect`.
 
 ## Limitations
 
 - **Stripped Binaries**: Production Soroban WASM files are often stripped to save space. Debug info is only available in binaries compiled with debug symbols (e.g., `cargo build`).
 - **Optimization**: Highly optimized WASM (via `wasm-opt`) may have slightly inaccurate line mappings due to code movement and inlining.
 - **Path Resolution**: DWARF often contains absolute paths from the build machine. If debugging on a different machine, source file loading may fail if paths don't match.
+
+## Source Breakpoint Semantics
+
+When setting a source breakpoint from VS Code, the adapter reports extra diagnostic details so users can distinguish source validation from runtime breakpoint behavior.
+
+- `verified`: Whether the adapter can prove an exact source-to-runtime mapping from debug metadata (for example, DWARF).
+- `setBreakpoint`: Whether the adapter will still install a runtime function breakpoint even if source verification is not available.
+- `HEURISTIC_NO_DWARF`: Reason code used when DWARF source mappings are unavailable but a best-effort function mapping is still possible.
+
+Concrete example:
+
+- You set a source breakpoint on `src/lib.rs:10`.
+- The adapter returns `verified=false`, `reasonCode=HEURISTIC_NO_DWARF` and a diagnostic message.
+- If line 10 maps heuristically to an exported contract entrypoint, `setBreakpoint=true` and execution still pauses when that function is reached.
 
 ## Testing
 

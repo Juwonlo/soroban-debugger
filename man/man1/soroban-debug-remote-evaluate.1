@@ -1,0 +1,19 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH evaluate 1  "evaluate " 
+.SH NAME
+evaluate \- Evaluate an expression in the current debug context
+.SH SYNOPSIS
+\fBevaluate\fR <\fB\-e\fR|\fB\-\-expression\fR> [\fB\-\-frame\-id\fR] [\fB\-h\fR|\fB\-\-help\fR] 
+.SH DESCRIPTION
+Evaluate an expression in the current debug context
+.SH OPTIONS
+.TP
+\fB\-e\fR, \fB\-\-expression\fR \fI<EXPRESSION>\fR
+Expression to evaluate
+.TP
+\fB\-\-frame\-id\fR \fI<FRAME_ID>\fR
+Stack frame ID for evaluation context (optional)
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help

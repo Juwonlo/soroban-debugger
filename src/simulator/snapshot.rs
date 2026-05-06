@@ -86,6 +86,10 @@ impl SnapshotManager {
 /// Represents the differences between two network snapshots
 #[derive(Debug, Clone)]
 pub struct SnapshotDiff {
+    /// State fingerprints
+    pub old_fingerprint: String,
+    pub new_fingerprint: String,
+
     /// Ledger sequence changes
     pub ledger_sequence_changed: bool,
     pub old_sequence: Option<u32>,
@@ -111,6 +115,8 @@ impl SnapshotDiff {
     /// Compute diff between two snapshots
     fn compute(before: &NetworkSnapshot, after: &NetworkSnapshot) -> Self {
         let mut diff = SnapshotDiff {
+            old_fingerprint: before.fingerprint(),
+            new_fingerprint: after.fingerprint(),
             ledger_sequence_changed: before.ledger.sequence != after.ledger.sequence,
             old_sequence: Some(before.ledger.sequence),
             new_sequence: Some(after.ledger.sequence),
@@ -214,6 +220,12 @@ impl SnapshotDiff {
     /// Format diff as human-readable string
     pub fn format_summary(&self) -> String {
         let mut output = String::new();
+
+        // Fingerprints
+        output.push_str(&format!(
+            "State Fingerprint: {} → {}\n",
+            self.old_fingerprint, self.new_fingerprint
+        ));
 
         // Ledger changes
         if self.ledger_sequence_changed {

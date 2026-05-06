@@ -25,6 +25,20 @@ mod config {
 }
 
 #[allow(dead_code)]
+mod debugger {
+    pub mod breakpoint {
+        #[derive(Clone, Debug)]
+        pub struct BreakpointSpec {
+            pub id: String,
+            pub function: String,
+            pub condition: Option<String>,
+            pub hit_condition: Option<String>,
+            pub log_message: Option<String>,
+        }
+    }
+}
+
+#[allow(dead_code)]
 #[path = "src/cli/args.rs"]
 mod args;
 
@@ -37,6 +51,7 @@ fn main() -> std::io::Result<()> {
     println!("cargo:rerun-if-changed=.git/HEAD");
     println!("cargo:rerun-if-changed=src/cli/args.rs");
     println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-env-changed=MAN_OUT_DIR");
 
     Ok(())
 }
@@ -70,16 +85,23 @@ fn command_stdout(program: &str, args: &[&str]) -> Option<String> {
 
 fn generate_man_pages() -> std::io::Result<()> {
     let cmd = Cli::command();
-    let repo_man_dir = Path::new("man").join("man1");
 
-    match render_to_dir(&cmd, &repo_man_dir) {
+    // Allow CI diff script to redirect output to a temp dir via MAN_OUT_DIR env var.
+    // Falls back to the committed man/man1 directory for normal builds.
+    let target_dir = if let Ok(override_dir) = std::env::var("MAN_OUT_DIR") {
+        std::path::PathBuf::from(override_dir)
+    } else {
+        Path::new("man").join("man1")
+    };
+
+    match render_to_dir(&cmd, &target_dir) {
         Ok(()) => Ok(()),
         Err(err) if err.kind() == io::ErrorKind::PermissionDenied => {
             let out_dir = std::env::var("OUT_DIR").unwrap_or_else(|_| "target".to_string());
             let fallback_dir = Path::new(&out_dir).join("man1");
             println!(
                 "cargo:warning=Cannot write man pages to {} (permission denied). Writing to {} instead.",
-                repo_man_dir.display(),
+                target_dir.display(),
                 fallback_dir.display()
             );
             render_to_dir(&cmd, &fallback_dir)

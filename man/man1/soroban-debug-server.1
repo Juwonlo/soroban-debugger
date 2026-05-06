@@ -4,10 +4,13 @@
 .SH NAME
 server \- Start debug server for remote connections
 .SH SYNOPSIS
-\fBserver\fR [\fB\-p\fR|\fB\-\-port\fR] [\fB\-t\fR|\fB\-\-token\fR] [\fB\-\-tls\-cert\fR] [\fB\-\-tls\-key\fR] [\fB\-h\fR|\fB\-\-help\fR] 
+\fBserver\fR [\fB\-\-host\fR] [\fB\-p\fR|\fB\-\-port\fR] [\fB\-t\fR|\fB\-\-token\fR] [\fB\-\-tls\-cert\fR] [\fB\-\-tls\-key\fR] [\fB\-\-repeat\fR] [\fB\-\-storage\-filter\fR] [\fB\-\-show\-events\fR] [\fB\-\-event\-filter\fR] [\fB\-\-mock\fR] [\fB\-h\fR|\fB\-\-help\fR] 
 .SH DESCRIPTION
 Start debug server for remote connections
 .SH OPTIONS
+.TP
+\fB\-\-host\fR \fI<HOST>\fR [default: 127.0.0.1]
+Host/interface to bind
 .TP
 \fB\-p\fR, \fB\-\-port\fR \fI<PORT>\fR [default: 9229]
 Port to listen on
@@ -20,6 +23,21 @@ TLS certificate file path (optional)
 .TP
 \fB\-\-tls\-key\fR \fI<TLS_KEY>\fR
 TLS private key file path (optional)
+.TP
+\fB\-\-repeat\fR \fI<N>\fR
+Repeat execution N times and show throughput/latency stats
+.TP
+\fB\-\-storage\-filter\fR \fI<PATTERN>\fR
+Filter storage view to only show keys matching pattern (repeatable)
+.TP
+\fB\-\-show\-events\fR
+Show contract events emitted during execution
+.TP
+\fB\-\-event\-filter\fR \fI<PATTERN>\fR
+Filter events by topic pattern (repeatable)
+.TP
+\fB\-\-mock\fR \fI<CONTRACT_ID.function=return_value>\fR
+Mock cross\-contract return: CONTRACT_ID.function=return_value (repeatable)
 .TP
 \fB\-h\fR, \fB\-\-help\fR
 Print help

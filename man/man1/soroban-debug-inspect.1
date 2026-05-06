@@ -4,7 +4,7 @@
 .SH NAME
 inspect \- Inspect contract information without executing
 .SH SYNOPSIS
-\fBinspect\fR <\fB\-c\fR|\fB\-\-contract\fR> [\fB\-\-functions\fR] [\fB\-\-metadata\fR] [\fB\-\-expected\-hash\fR] [\fB\-\-dependency\-graph\fR] [\fB\-h\fR|\fB\-\-help\fR] 
+\fBinspect\fR <\fB\-c\fR|\fB\-\-contract\fR> [\fB\-\-functions\fR] [\fB\-\-metadata\fR] [\fB\-\-format\fR] [\fB\-\-source\-map\-diagnostics\fR] [\fB\-\-source\-map\-limit\fR] [\fB\-\-expected\-hash\fR] [\fB\-\-dependency\-graph\fR] [\fB\-h\fR|\fB\-\-help\fR] 
 .SH DESCRIPTION
 Inspect contract information without executing
 .SH OPTIONS
@@ -18,6 +18,19 @@ Show exported functions
 \fB\-\-metadata\fR
 Show contract metadata
 .TP
+\fB\-\-format\fR \fI<FORMAT>\fR [default: pretty]
+Output format: pretty (default) or json
+.br
+
+.br
+[\fIpossible values: \fRpretty, json]
+.TP
+\fB\-\-source\-map\-diagnostics\fR
+Print source map diagnostics including resolved mappings, missing DWARF sections, and fallback behavior
+.TP
+\fB\-\-source\-map\-limit\fR \fI<SOURCE_MAP_LIMIT>\fR [default: 20]
+Maximum number of resolved mappings to print in source map diagnostics output
+.TP
 \fB\-\-expected\-hash\fR \fI<EXPECTED_HASH>\fR
 Expected SHA\-256 hash of the WASM file. If provided, loading will fail if the computed hash does not match
 .TP
@@ -26,13 +39,7 @@ Show cross\-contract dependency graph in specified format
 .br
 
 .br
-\fIPossible values:\fR
-.RS 14
-.IP \(bu 2
-dot
-.IP \(bu 2
-mermaid
-.RE
+[\fIpossible values: \fRdot, mermaid]
 .TP
 \fB\-h\fR, \fB\-\-help\fR
 Print help

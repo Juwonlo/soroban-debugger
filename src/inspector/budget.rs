@@ -161,6 +161,24 @@ impl BudgetInspector {
             format!("{} B", bytes)
         }
     }
+
+    pub fn create_checkpoint(
+        host: &Host,
+        location: String,
+        start_time: Option<std::time::Instant>,
+    ) -> ResourceCheckpoint {
+        let info = Self::get_cpu_usage(host);
+        let elapsed = start_time
+            .map(|t| t.elapsed().as_millis() as u64)
+            .unwrap_or(0);
+
+        ResourceCheckpoint {
+            timestamp_ms: elapsed,
+            cpu_instructions: info.cpu_instructions,
+            memory_bytes: info.memory_bytes,
+            location_name: location,
+        }
+    }
 }
 
 /// Severity level for budget warnings
@@ -179,12 +197,20 @@ pub struct BudgetWarning {
 }
 
 /// Budget information snapshot
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct BudgetInfo {
     pub cpu_instructions: u64,
     pub cpu_limit: u64,
     pub memory_bytes: u64,
     pub memory_limit: u64,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ResourceCheckpoint {
+    pub timestamp_ms: u64,
+    pub cpu_instructions: u64,
+    pub memory_bytes: u64,
+    pub location_name: String,
 }
 
 impl BudgetInfo {
@@ -416,7 +442,7 @@ impl MemoryTracker {
 
     pub fn get_top_allocations(&self, count: usize) -> Vec<MemoryAllocation> {
         let mut sorted: Vec<MemoryAllocation> = self.allocations.iter().cloned().collect();
-        sorted.sort_by(|a, b| b.size.cmp(&a.size));
+        sorted.sort_by_key(|b| std::cmp::Reverse(b.size));
         sorted.into_iter().take(count).collect()
     }
 

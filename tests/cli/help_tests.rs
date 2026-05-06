@@ -73,6 +73,29 @@ fn test_compare_help() {
 }
 
 #[test]
+fn test_remote_help_shows_timeout_and_retry_options() {
+    let mut cmd = assert_cmd::Command::cargo_bin("soroban-debug").expect("Failed to find binary");
+    cmd.args(["remote", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("--timeout-ms"))
+        .stdout(predicate::str::contains("--inspect-timeout-ms"))
+        .stdout(predicate::str::contains("--retry-attempts"));
+}
+
+#[test]
+fn test_server_help_shows_auth_and_tls_options() {
+    let mut cmd = assert_cmd::Command::cargo_bin("soroban-debug").expect("Failed to find binary");
+    cmd.args(["server", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("--host"))
+        .stdout(predicate::str::contains("--token"))
+        .stdout(predicate::str::contains("--tls-cert"))
+        .stdout(predicate::str::contains("--tls-key"));
+}
+
+#[test]
 fn test_upgrade_check_help() {
     let mut cmd = assert_cmd::Command::cargo_bin("soroban-debug").expect("Failed to find binary");
     cmd.args(["upgrade-check", "--help"])
@@ -140,7 +163,8 @@ fn test_inspect_help_shows_options() {
         .assert()
         .success()
         .stdout(predicate::str::contains("--functions"))
-        .stdout(predicate::str::contains("--metadata"));
+        .stdout(predicate::str::contains("--metadata"))
+        .stdout(predicate::str::contains("--source-map-diagnostics"));
 }
 
 #[test]

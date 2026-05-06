@@ -4,13 +4,19 @@
 .SH NAME
 compare \- Compare two execution trace JSON files side\-by\-side
 .SH SYNOPSIS
-\fBcompare\fR [\fB\-o\fR|\fB\-\-output\fR] [\fB\-h\fR|\fB\-\-help\fR] <\fITRACE_A\fR> <\fITRACE_B\fR> 
+\fBcompare\fR [\fB\-o\fR|\fB\-\-output\fR] [\fB\-\-ignore\-path\fR] [\fB\-\-ignore\-field\fR] [\fB\-h\fR|\fB\-\-help\fR] <\fITRACE_A\fR> <\fITRACE_B\fR> 
 .SH DESCRIPTION
 Compare two execution trace JSON files side\-by\-side
 .SH OPTIONS
 .TP
 \fB\-o\fR, \fB\-\-output\fR \fI<OUTPUT>\fR
 Output file for the comparison report (default: stdout)
+.TP
+\fB\-\-ignore\-path\fR \fI<PATH>\fR
+Ignore a JSON path during comparison. Repeatable. Paths are slash\-delimited, for example: /storage/fee_pool or /return_value/meta/timestamp
+.TP
+\fB\-\-ignore\-field\fR \fI<FIELD>\fR
+Ignore an object field name anywhere in the trace during comparison. Repeatable. Useful for timestamps, sequence numbers, and similar metadata
 .TP
 \fB\-h\fR, \fB\-\-help\fR
 Print help

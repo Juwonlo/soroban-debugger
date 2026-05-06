@@ -4,7 +4,7 @@
 .SH NAME
 scenario \- Run a multi\-step scenario from a TOML file
 .SH SYNOPSIS
-\fBscenario\fR <\fB\-\-scenario\fR> <\fB\-c\fR|\fB\-\-contract\fR> [\fB\-\-storage\fR] [\fB\-h\fR|\fB\-\-help\fR] 
+\fBscenario\fR <\fB\-\-scenario\fR> <\fB\-c\fR|\fB\-\-contract\fR> [\fB\-\-storage\fR] [\fB\-\-timeout\fR] [\fB\-\-tags\fR] [\fB\-\-exclude\-tags\fR] [\fB\-h\fR|\fB\-\-help\fR] 
 .SH DESCRIPTION
 Run a multi\-step scenario from a TOML file
 .SH OPTIONS
@@ -17,6 +17,15 @@ Path to the contract WASM file
 .TP
 \fB\-\-storage\fR \fI<STORAGE>\fR
 Initial storage state as JSON object
+.TP
+\fB\-\-timeout\fR \fI<TIMEOUT>\fR
+Default execution timeout in seconds for steps that do not override it. Use 0 to disable the timeout entirely
+.TP
+\fB\-\-tags\fR \fI<TAGS>\fR
+Only run steps that have at least one of these tags (comma\-separated)
+.TP
+\fB\-\-exclude\-tags\fR \fI<EXCLUDE_TAGS>\fR
+Skip steps that have any of these tags (comma\-separated)
 .TP
 \fB\-h\fR, \fB\-\-help\fR
 Print help

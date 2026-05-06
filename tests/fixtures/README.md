@@ -1,73 +1,69 @@
 # Test Fixture Contracts
 
-This directory contains pre-compiled WASM test fixture contracts for use across all test suites.
+This directory contains Soroban contract fixtures used by the test suite.
+`manifest.json` is the checked-in source of truth for fixture exports, hashes, source paths, and artifact locations.
 
 ## Contracts
 
-- **counter** - Simple counter contract with increment, decrement, and get functions
-- **echo** - Echo contract that returns its input unchanged
-- **panic** - Contract that always panics, useful for error testing
-- **budget_heavy** - Contract with budget-intensive operations for budget testing
-- **cross_contract** - Contract that calls other contracts, for cross-contract call testing
+- `counter` - Simple counter contract with `increment` and `get`
+- `echo` - Echo contract that returns its input unchanged
+- `always_panic` - Contract that always panics, useful for error testing
+- `budget_heavy` - Contract with budget-intensive operations for budget testing
+- `cross_contract` - Contract that calls other contracts for cross-contract call testing
+- `same_return` - Contract with divergent branches that intentionally return the same value
 
 ## Building
 
-To rebuild all WASM files from source:
+To rebuild all fixture artifacts and refresh the manifest:
 
-### Linux/macOS:
+Linux/macOS:
 ```bash
 ./build.sh
 ```
 
-### Windows:
+Windows:
 ```powershell
 .\build.ps1
 ```
 
-Or manually:
-```bash
-cd contracts/counter && cargo build --release --target wasm32-unknown-unknown
-# Copy the resulting .wasm file to wasm/counter.wasm
-```
+Both scripts build release and `release-debug` WASM artifacts under `tests/fixtures/wasm/` and then rewrite `tests/fixtures/manifest.json` with the expected exports, source paths, and SHA-256 hashes for every generated artifact.
 
 ## Usage in Tests
 
 ```rust
-use std::path::PathBuf;
-
-fn get_fixture_path(name: &str) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("tests")
-        .join("fixtures")
-        .join("wasm")
-        .join(format!("{}.wasm", name))
-}
+#[path = "fixtures/mod.rs"]
+mod fixtures;
 
 #[test]
 fn test_with_counter() {
-    let wasm_path = get_fixture_path("counter");
+    let wasm_path = fixtures::get_fixture_path(fixtures::names::COUNTER);
     let wasm_bytes = std::fs::read(&wasm_path).unwrap();
-    // Use wasm_bytes in your test...
+    let source_path = fixtures::source_path(fixtures::names::COUNTER);
+
+    assert!(source_path.exists());
+    assert!(!wasm_bytes.is_empty());
 }
 ```
 
+Use `fixtures::artifact_path(name, "debug")` when a test needs the debug-info-preserving fixture.
+
+## Manifest Shape
+
+The manifest is JSON and includes, for each fixture:
+
+- the exported contract functions
+- the source contract directory and `src/lib.rs` path
+- the release artifact path and SHA-256 hash
+- the debug artifact path and SHA-256 hash when debug fixtures have been generated
+
 ## Structure
 
-```
+```text
 tests/fixtures/
-├── contracts/          # Source code for contracts
-│   ├── counter/
-│   ├── echo/
-│   ├── panic/
-│   ├── budget_heavy/
-│   └── cross_contract/
-├── wasm/               # Pre-compiled WASM files
-│   ├── counter.wasm
-│   ├── echo.wasm
-│   ├── panic.wasm
-│   ├── budget_heavy.wasm
-│   └── cross_contract.wasm
-├── build.sh            # Build script (Linux/macOS)
-├── build.ps1           # Build script (Windows)
-└── README.md           # This file
+|-- contracts/
+|-- manifest.json
+|-- wasm/
+|-- build.sh
+|-- build.ps1
+`-- README.md
 ```

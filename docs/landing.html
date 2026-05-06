@@ -1,0 +1,491 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Soroban Debugger | Landing + Documentation</title>
+    <meta
+      name="description"
+      content="Soroban Debugger overview, quickstart, feature map, and VS Code extension deployment guide."
+    />
+    <style>
+      :root {
+        --bg: #f7f5ef;
+        --paper: #fffdf8;
+        --ink: #1d1b18;
+        --muted: #5e5a52;
+        --brand: #0f766e;
+        --brand-strong: #115e59;
+        --accent: #b45309;
+        --line: #d8d1c4;
+        --ok: #166534;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        background:
+          radial-gradient(circle at 95% 10%, rgba(180, 83, 9, 0.18), transparent 35%),
+          radial-gradient(circle at 5% 20%, rgba(15, 118, 110, 0.15), transparent 40%),
+          var(--bg);
+        color: var(--ink);
+        font-family: "Space Grotesk", "Trebuchet MS", "Segoe UI", sans-serif;
+        line-height: 1.45;
+      }
+
+      a {
+        color: var(--brand-strong);
+        text-decoration-thickness: 2px;
+        text-underline-offset: 3px;
+      }
+
+      .container {
+        width: min(1080px, 92vw);
+        margin: 0 auto;
+      }
+
+      header {
+        padding: 36px 0 20px;
+      }
+
+      .pill {
+        display: inline-block;
+        background: #e7f4f3;
+        border: 1px solid #b8e2de;
+        color: #0b4d48;
+        border-radius: 999px;
+        padding: 6px 12px;
+        font-size: 0.82rem;
+        letter-spacing: 0.01em;
+      }
+
+      h1 {
+        margin: 14px 0 8px;
+        font-size: clamp(2rem, 4.8vw, 3.5rem);
+        line-height: 1.05;
+        letter-spacing: -0.02em;
+      }
+
+      .subtitle {
+        max-width: 68ch;
+        color: var(--muted);
+        font-size: clamp(1rem, 1.8vw, 1.18rem);
+      }
+
+      .hero-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 20px;
+      }
+
+      .button {
+        display: inline-block;
+        border-radius: 12px;
+        padding: 10px 14px;
+        font-weight: 700;
+        text-decoration: none;
+        border: 1px solid transparent;
+      }
+
+      .button.primary {
+        background: var(--brand);
+        color: #fff;
+      }
+
+      .button.secondary {
+        background: #fff;
+        border-color: var(--line);
+        color: var(--ink);
+      }
+
+      .stats {
+        margin: 24px 0 6px;
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .stat {
+        background: var(--paper);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 12px;
+      }
+
+      .stat strong {
+        display: block;
+        font-size: 1.1rem;
+      }
+
+      nav {
+        margin: 24px 0 10px;
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 10px;
+      }
+
+      nav ul {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      nav a {
+        display: block;
+        padding: 8px 10px;
+        border-radius: 8px;
+        text-decoration: none;
+        color: var(--ink);
+        font-weight: 600;
+      }
+
+      nav a:hover {
+        background: #f1ece2;
+      }
+
+      section {
+        padding: 22px 0 10px;
+      }
+
+      h2 {
+        margin: 0 0 10px;
+        font-size: clamp(1.3rem, 2.4vw, 1.9rem);
+      }
+
+      .card-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .card {
+        background: var(--paper);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 14px;
+      }
+
+      .card h3 {
+        margin: 0 0 8px;
+        font-size: 1.05rem;
+      }
+
+      .mono {
+        font-family: "IBM Plex Mono", "Fira Code", "SFMono-Regular", monospace;
+      }
+
+      .terminal {
+        background: #171615;
+        color: #f5f0e6;
+        border-radius: 12px;
+        border: 1px solid #2a2826;
+        padding: 14px;
+        overflow: auto;
+      }
+
+      .terminal .ok {
+        color: #93d7b2;
+      }
+
+      .terminal .warn {
+        color: #ffd18d;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        overflow: hidden;
+      }
+
+      th,
+      td {
+        text-align: left;
+        padding: 10px 12px;
+        border-bottom: 1px solid #ece4d5;
+      }
+
+      th {
+        background: #f2ecdf;
+        font-size: 0.9rem;
+      }
+
+      .steps {
+        counter-reset: step;
+        list-style: none;
+        padding: 0;
+        margin: 0;
+      }
+
+      .steps li {
+        counter-increment: step;
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        margin-bottom: 10px;
+        padding: 12px 12px 12px 42px;
+        position: relative;
+      }
+
+      .steps li::before {
+        content: counter(step);
+        position: absolute;
+        top: 10px;
+        left: 12px;
+        width: 22px;
+        height: 22px;
+        border-radius: 999px;
+        display: grid;
+        place-items: center;
+        background: #ece7db;
+        color: #3f3a31;
+        font-weight: 700;
+        font-size: 0.9rem;
+      }
+
+      .doc-links {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .doc-links a {
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 10px 12px;
+        text-decoration: none;
+        color: var(--ink);
+        display: block;
+        font-weight: 600;
+      }
+
+      footer {
+        margin: 24px 0 40px;
+        color: var(--muted);
+        font-size: 0.94rem;
+      }
+
+      @media (max-width: 920px) {
+        .stats {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .card-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .doc-links {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="container">
+      <span class="pill">Soroban Debugger</span>
+      <h1>Debug Soroban contracts without guessing.</h1>
+      <p class="subtitle">
+        Run locally or remotely, set breakpoints, inspect storage, step execution, and compare
+        performance regressions. This page is a practical overview plus deployment docs.
+      </p>
+      <div class="hero-actions">
+        <a class="button primary" href="../README.md">Open README</a>
+        <a class="button secondary" href="../extensions/vscode/README.md">Open VS Code Extension Docs</a>
+      </div>
+      <div class="stats">
+        <div class="stat"><strong>CLI + DAP</strong>One core engine for terminal and VS Code.</div>
+        <div class="stat"><strong>Source maps</strong>Map WASM execution back to Rust lines.</div>
+        <div class="stat"><strong>Remote mode</strong>Token-authenticated debugger server mode.</div>
+        <div class="stat"><strong>Regression gate</strong>Criterion baseline compare in CI.</div>
+      </div>
+    </header>
+
+    <main class="container">
+      <nav aria-label="Section navigation">
+        <ul>
+          <li><a href="#what">What It Does</a></li>
+          <li><a href="#quickstart">Quickstart Demo</a></li>
+          <li><a href="#features">Feature Surface</a></li>
+          <li><a href="#workflow">Typical Workflow</a></li>
+          <li><a href="#docs">Documentation Map</a></li>
+          <li><a href="#extension-deploy">VS Code Extension Deployment</a></li>
+        </ul>
+      </nav>
+
+      <section id="what">
+        <h2>What It Does</h2>
+        <div class="card-grid">
+          <article class="card">
+            <h3>1. Execute and inspect</h3>
+            <p>Run contract entrypoints with JSON args and inspect storage, budgets, events, and stack state.</p>
+          </article>
+          <article class="card">
+            <h3>2. Stop precisely</h3>
+            <p>Set function/source breakpoints, step in/out/over, and review timeline snapshots while paused.</p>
+          </article>
+          <article class="card">
+            <h3>3. Compare behavior</h3>
+            <p>Use symbolic analysis, replay seeds, and benchmark regression checks to catch drift in CI.</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="quickstart">
+        <h2>Quickstart Demo (CLI)</h2>
+        <p>Basic run with args:</p>
+<pre class="terminal mono"><code>cargo run -- run \
+  --contract tests/fixtures/wasm/counter.wasm \
+  --function increment \
+  --args '[]'</code></pre>
+
+        <p>Interactive stepping:</p>
+        <pre class="terminal mono"><code>cargo run -- interactive \
+  --contract target/wasm32-unknown-unknown/release/contract.wasm
+
+# inside REPL:
+break transfer
+continue
+inspect
+storage</code></pre>
+
+        <p>Remote server + client:</p>
+        <pre class="terminal mono"><code># terminal A
+soroban-debug server --host 127.0.0.1 --port 9229 --token secret
+
+# terminal B
+soroban-debug run --remote 127.0.0.1:9229 --token secret</code></pre>
+      </section>
+
+      <section id="features">
+        <h2>Feature Surface</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Capability</th>
+              <th>CLI</th>
+              <th>VS Code Extension</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Breakpoints and step controls</td>
+              <td class="mono">run / interactive</td>
+              <td>Yes via DAP controls</td>
+            </tr>
+            <tr>
+              <td>Source map diagnostics</td>
+              <td>Via logs/tooling</td>
+              <td>Command: Diagnose Source Maps</td>
+            </tr>
+            <tr>
+              <td>Remote authenticated sessions</td>
+              <td class="mono">server + remote</td>
+              <td>Attach launch config</td>
+            </tr>
+            <tr>
+              <td>Batch execution / regression mode</td>
+              <td class="mono">--batch-args, --repeat</td>
+              <td>Partial support with <span class="mono">batchArgs</span></td>
+            </tr>
+            <tr>
+              <td>Benchmark regression gate</td>
+              <td class="mono">bench-regression</td>
+              <td>Not directly in extension UI</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="workflow">
+        <h2>Typical Workflow</h2>
+        <ol class="steps">
+          <li>Build WASM contract: <span class="mono">cargo build --target wasm32-unknown-unknown --release</span>.</li>
+          <li>Run with deterministic args and optional snapshots to reproduce behavior.</li>
+          <li>Set source/function breakpoints and inspect storage deltas while paused.</li>
+          <li>Move to VS Code for source-centric debugging and richer DAP visuals.</li>
+          <li>Add symbolic and benchmark checks to CI for regression protection.</li>
+        </ol>
+      </section>
+
+      <section id="docs">
+        <h2>Documentation Map</h2>
+        <div class="doc-links">
+          <a href="./getting-started.md">Getting Started</a>
+          <a href="./faq.md">FAQ</a>
+          <a href="./remote-debugging.md">Remote Debugging</a>
+          <a href="./remote-troubleshooting.md">Remote Troubleshooting</a>
+          <a href="./source-level-debugging.md">Source-Level Debugging</a>
+          <a href="./instruction-stepping.md">Instruction Stepping</a>
+          <a href="./feature-matrix.md">CLI vs Extension Feature Matrix</a>
+          <a href="./performance-regressions.md">Performance Regression Gate</a>
+        </div>
+      </section>
+
+      <section id="extension-deploy">
+        <h2>How To Deploy The VS Code Extension</h2>
+        <ol class="steps">
+          <li>
+            Prepare accounts and tokens:
+            <span class="mono">publisher: soroban</span> in
+            <span class="mono">extensions/vscode/package.json</span>, plus a Personal Access Token
+            from Azure DevOps for Marketplace publishing.
+          </li>
+          <li>
+            Build and validate:
+            <span class="mono">cd extensions/vscode && npm ci && npm run ci</span>
+          </li>
+          <li>
+            Install packaging tool:
+            <span class="mono">npm i -g @vscode/vsce</span>
+          </li>
+          <li>
+            Package locally:
+            <span class="mono">vsce package</span>
+            to produce a <span class="mono">.vsix</span> artifact.
+          </li>
+          <li>
+            Smoke test the package:
+            install the generated <span class="mono">.vsix</span> in VS Code and run a real debug
+            session against <span class="mono">soroban-debug</span>.
+          </li>
+          <li>
+            Publish:
+            <span class="mono">vsce publish patch</span>
+            (or <span class="mono">minor</span>/<span class="mono">major</span>), then verify
+            listing metadata, changelog, and quickstart instructions.
+          </li>
+        </ol>
+
+        <p class="mono">
+          Quick commands:
+          cd extensions/vscode && npm ci && npm run ci && vsce package && vsce publish patch
+        </p>
+        <p class="subtitle">
+          Keep extension and CLI versions aligned in release notes, and run DAP smoke tests against
+          the same commit/release line before publishing.
+        </p>
+      </section>
+    </main>
+
+    <footer class="container">
+      <p>
+        Soroban Debugger project docs live under <span class="mono">/docs</span>. This HTML page
+        is intended as a fast onboarding and demo hub for contributors, users, and release owners.
+      </p>
+      <p class="mono">Last updated in-repo.</p>
+    </footer>
+  </body>
+</html>

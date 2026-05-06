@@ -2,6 +2,8 @@
 
 The Soroban Debugger's scenario runner allows you to write integration-test-style scenarios for Soroban contracts directly in TOML — no Rust test code required. This tutorial will walk you through the complete TOML format, provide a worked example, and show you how to run scenarios and interpret the output.
 
+For practical recipes and reusable patterns, check out the [Scenario Cookbook](../scenario-cookbook.md).
+
 ## Overview
 
 The scenario runner executes a sequence of contract function calls defined in a TOML file, validating both return values and storage state at each step. This approach offers several advantages:
@@ -16,6 +18,9 @@ The scenario runner executes a sequence of contract function calls defined in a 
 ### Root Structure
 
 ```toml
+[defaults]
+timeout_secs = 30
+
 [[steps]]
 # Step 1 configuration
 
@@ -32,8 +37,23 @@ Each step in a scenario supports the following fields:
 | `name` | String | Optional | Human-readable name for the step (defaults to function name) |
 | `function` | String | Required | Name of the contract function to call |
 | `args` | String | Optional | JSON array of arguments to pass to the function |
+| `timeout_secs` | Integer | Optional | Per-step execution timeout override in seconds. `0` disables the timeout |
 | `expected_return` | String | Optional | Expected return value (string comparison) |
 | `expected_storage` | Table | Optional | Map of storage keys to expected values |
+
+### Timeout Defaults and Overrides
+
+You can define a scenario-wide default timeout in a top-level `[defaults]` table and then
+override it for individual steps with `timeout_secs`.
+
+Timeout precedence is:
+
+1. Step `timeout_secs`
+2. Scenario `[defaults].timeout_secs`
+3. CLI `scenario --timeout`
+4. Built-in default of 30 seconds
+
+Use `0` at either the default or step level to disable timeout enforcement.
 
 ### Storage Assertions
 
@@ -369,8 +389,45 @@ expected_return = "800"
 - Use storage assertions to understand contract state
 - Verify function names and argument types match the contract
 
+## Symbolic Analysis
+
+The symbolic analyzer helps you identify edge cases and improve branch coverage by automatically generating valid, type-aware inputs for your contract functions.
+
+### Key Benefits
+
+- **Type-Aware Generation**: Automatically generates valid seeds for `Address`, `Option`, `Vec`, `Map`, `Tuple`, and primitive types.
+- **Coverage Exploration**: Systematically explores function branches to find panics or unexpected behavior.
+- **Deterministic**: Produces reproducible test scenarios.
+
+### Command Usage
+
+```bash
+soroban-debugger symbolic --contract <WASM_FILE> --function <FUNCTION_NAME> [OPTIONS]
+```
+
+### Strategy Knobs
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--max-breadth` | 5 | Maximum number of seeds per primitive type |
+| `--max-depth` | 3 | Maximum recursion depth for nested types |
+| `--input-combination-cap` | 100 | Maximum number of input combinations to generate |
+| `--path-cap` | 100 | Maximum number of generated inputs to execute |
+| `--profile` | `balanced` | Preset budget (fast, balanced, deep) |
+
+### Example
+
+Generate up to 50 test cases for a `transfer` function with complex nested types:
+
+```bash
+soroban-debugger symbolic \
+  --contract token.wasm \
+  --function transfer \
+  --max-breadth 10 \
+  --max-depth 4 \
+  --input-combination-cap 50
+```
+
 ## Conclusion
 
-The scenario runner provides a powerful way to test Soroban contracts without writing Rust test code. By using the TOML format, you can quickly create comprehensive integration tests that validate both function behavior and contract state.
-
-The combination of return value assertions and storage validation makes it ideal for testing complex contract workflows and ensuring contract correctness across multiple operations.
+The combination of the scenario runner and symbolic analyzer provides a comprehensive toolkit for testing and hardening Soroban contracts. Use the symbolic analyzer to discover edge cases, and then capture those as permanent integration tests in TOML scenarios.

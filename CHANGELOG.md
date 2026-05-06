@@ -2,41 +2,34 @@
 
 All notable changes to this project will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
 ### Added
+- Added `invocation_reason` to `DynamicTraceEvent` protocol to support better cross-contract call analysis.
+- New `format_resource_timeline` utility for generating markdown reports.
+- Added `CODE_OF_CONDUCT.md` and `SECURITY.md`.
+- Added support for connection timeouts and retries in remote debugging.
 
-- Watch mode (`--watch` flag) for automatic reload and re-execution when WASM file changes
-  - Debounced file system events (~500ms) to avoid repeated triggers
-  - Clean terminal output on each run
-  - Graceful Ctrl+C exit handling
-  - Errors don't terminate watch mode
+### Fixed
+- Fixed protocol breakage in security analyzer tests.
+- Resolved man page drift by regenerating documentation.
+- Improved error messaging for authorization failures.
+- Fixed `SecurityAnalyzer::analyze` signature consistency across tests and examples.
 
-### Deprecated
+### Changed
+- Standardized project landing page links in README.
+- Updated FAQ with more detailed troubleshooting for contract panics.
 
-- CLI flag `--wasm` and `--contract-path` are deprecated in favor of `--contract`
-  - Deprecation warnings are now shown in yellow when these flags are used
-  - The flags will continue to work but users should migrate to `--contract`
-- CLI flag `--snapshot` is deprecated in favor of `--network-snapshot`
-  - Deprecation warnings are now shown in yellow when this flag is used
-  - The flag will continue to work but users should migrate to `--network-snapshot`
-
-## [0.1.0] - 2026-02-19
+## [0.1.0] - 2024-04-20
 
 ### Added
-
-- Step-through execution of Soroban contracts
-- Breakpoints at function boundaries
-- Contract storage and state inspection
-- CPU and memory budget tracking
-- Call stack viewing for contract invocations
-- Interactive terminal UI for debugging sessions
-- Cross-contract call support
-- Basic test coverage
-- Contribution guidelines
-
-[Unreleased]: https://github.com/Timi16/soroban-debugger/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/Timi16/soroban-debugger/releases/tag/v0.1.0
+- Initial release of the Soroban Debugger.
+- Support for interactive debugging with breakpoints and stepping.
+- Source-level mapping for Rust contracts.
+- Remote debugging server and client.
+- Security analyzer with rule-based finding detection.
+- Budget and resource tracking.
+- Scenario runner for automated integration testing.

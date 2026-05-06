@@ -23,6 +23,7 @@ pub struct StorageAccess {
 pub struct FunctionCallMetadata {
     pub caller: String,
     pub callee: String,
+    pub invocation_reason: crate::output::InvocationReason,
     pub arguments: Vec<String>,
     pub timestamp: u128,
     pub sequence: usize,
@@ -44,6 +45,8 @@ pub struct DebugEnv {
     operation_sequence: usize,
     /// Current call depth for function tracking
     call_depth: usize,
+    /// Unified dynamic trace events for analysis
+    dynamic_events: Vec<crate::server::protocol::DynamicTraceEvent>,
 }
 
 impl DebugEnv {
@@ -54,18 +57,43 @@ impl DebugEnv {
             key_access_index: HashMap::new(),
             operation_sequence: 0,
             call_depth: 0,
+            dynamic_events: Vec::new(),
         }
+    }
+
+    /// Record a dynamic trace event
+    pub fn record_event(
+        &mut self,
+        kind: crate::server::protocol::DynamicTraceEventKind,
+        message: String,
+        invocation_reason: Option<crate::output::InvocationReason>,
+    ) {
+        let event = crate::server::protocol::DynamicTraceEvent {
+            sequence: self.operation_sequence,
+            kind,
+            message,
+            call_depth: Some(self.call_depth as u64),
+            invocation_reason,
+            ..Default::default()
+        };
+        self.dynamic_events.push(event);
+        self.operation_sequence += 1;
     }
 
     /// Record a storage read operation
     pub fn track_storage_read(&mut self, key: impl Into<String>) {
         let key_str = key.into();
+        self.record_event(
+            crate::server::protocol::DynamicTraceEventKind::StorageRead,
+            format!("Read: {}", key_str),
+            None,
+        );
         let access = StorageAccess {
             access_type: StorageAccessType::Read,
             key: key_str.clone(),
             value: None,
             timestamp: Self::current_timestamp(),
-            sequence: self.operation_sequence,
+            sequence: self.operation_sequence - 1,
         };
         let index = self.storage_accesses.len();
         self.storage_accesses.push(access);
@@ -73,19 +101,23 @@ impl DebugEnv {
             .entry(key_str)
             .or_default()
             .push(index);
-        self.operation_sequence += 1;
     }
 
     /// Record a storage write operation
     pub fn track_storage_write(&mut self, key: impl Into<String>, value: impl Into<String>) {
         let key_str = key.into();
         let value_str = value.into();
+        self.record_event(
+            crate::server::protocol::DynamicTraceEventKind::StorageWrite,
+            format!("Write: {} = {}", key_str, value_str),
+            None,
+        );
         let access = StorageAccess {
             access_type: StorageAccessType::Write,
             key: key_str.clone(),
             value: Some(value_str),
             timestamp: Self::current_timestamp(),
-            sequence: self.operation_sequence,
+            sequence: self.operation_sequence - 1,
         };
         let index = self.storage_accesses.len();
         self.storage_accesses.push(access);
@@ -93,11 +125,22 @@ impl DebugEnv {
             .entry(key_str)
             .or_default()
             .push(index);
-        self.operation_sequence += 1;
     }
 
     /// Record the start of a function call
-    pub fn enter_function(&mut self, _caller: impl Into<String>, _callee: impl Into<String>) {
+    pub fn enter_function(
+        &mut self,
+        caller: impl Into<String>,
+        callee: impl Into<String>,
+        invocation_reason: crate::output::InvocationReason,
+    ) {
+        let caller_str = caller.into();
+        let callee_str = callee.into();
+        self.record_event(
+            crate::server::protocol::DynamicTraceEventKind::FunctionCall,
+            format!("Call: {} -> {}", caller_str, callee_str),
+            Some(invocation_reason),
+        );
         self.call_depth += 1;
     }
 
@@ -106,25 +149,43 @@ impl DebugEnv {
         &mut self,
         caller: impl Into<String>,
         callee: impl Into<String>,
+        invocation_reason: crate::output::InvocationReason,
         arguments: Vec<String>,
         result: Option<impl Into<String>>,
         error: Option<impl Into<String>>,
     ) {
+        let res_str = result.map(|r| r.into());
+        let err_str = error.map(|e| e.into());
+
+        self.record_event(
+            crate::server::protocol::DynamicTraceEventKind::Diagnostic,
+            format!(
+                "Return: {}",
+                res_str.as_deref().or(err_str.as_deref()).unwrap_or("void")
+            ),
+            Some(invocation_reason),
+        );
+
         let call = FunctionCallMetadata {
             caller: caller.into(),
             callee: callee.into(),
+            invocation_reason,
             arguments,
             timestamp: Self::current_timestamp(),
-            sequence: self.operation_sequence,
+            sequence: self.operation_sequence - 1,
             depth: self.call_depth.saturating_sub(1),
-            result: result.map(|r| r.into()),
-            error: error.map(|e| e.into()),
+            result: res_str,
+            error: err_str,
         };
         self.function_calls.push(call);
-        self.operation_sequence += 1;
         if self.call_depth > 0 {
             self.call_depth -= 1;
         }
+    }
+
+    /// Get all dynamic trace events
+    pub fn dynamic_events(&self) -> &[crate::server::protocol::DynamicTraceEvent] {
+        &self.dynamic_events
     }
 
     /// Get all storage accesses
@@ -295,10 +356,15 @@ mod tests {
     #[test]
     fn test_record_function_call() {
         let mut env = DebugEnv::new();
-        env.enter_function("main", "transfer");
+        env.enter_function(
+            "main",
+            "transfer",
+            crate::output::InvocationReason::Entrypoint,
+        );
         env.record_function_call(
             "main",
             "transfer",
+            crate::output::InvocationReason::Entrypoint,
             vec!["alice".to_string(), "bob".to_string(), "100".to_string()],
             Some("success"),
             None::<&str>,
@@ -307,6 +373,10 @@ mod tests {
         assert_eq!(env.function_call_count(), 1);
         let calls = &env.function_calls;
         assert_eq!(calls[0].callee, "transfer");
+        assert_eq!(
+            calls[0].invocation_reason,
+            crate::output::InvocationReason::Entrypoint
+        );
         assert_eq!(calls[0].arguments.len(), 3);
         assert_eq!(calls[0].result, Some("success".to_string()));
         assert_eq!(calls[0].error, None);
@@ -315,10 +385,15 @@ mod tests {
     #[test]
     fn test_function_call_with_error() {
         let mut env = DebugEnv::new();
-        env.enter_function("main", "transfer");
+        env.enter_function(
+            "main",
+            "transfer",
+            crate::output::InvocationReason::Entrypoint,
+        );
         env.record_function_call(
             "main",
             "transfer",
+            crate::output::InvocationReason::Entrypoint,
             vec!["alice".to_string(), "bob".to_string()],
             None::<&str>,
             Some("insufficient balance"),
@@ -333,20 +408,43 @@ mod tests {
     fn test_get_function_calls_for() {
         let mut env = DebugEnv::new();
 
-        env.enter_function("main", "transfer");
-        env.record_function_call("main", "transfer", vec![], None::<&str>, None::<&str>);
+        env.enter_function(
+            "main",
+            "transfer",
+            crate::output::InvocationReason::Entrypoint,
+        );
+        env.record_function_call(
+            "main",
+            "transfer",
+            crate::output::InvocationReason::Entrypoint,
+            vec![],
+            None::<&str>,
+            None::<&str>,
+        );
 
-        env.enter_function("main", "mint");
+        env.enter_function("main", "mint", crate::output::InvocationReason::Entrypoint);
         env.record_function_call(
             "main",
             "mint",
+            crate::output::InvocationReason::Entrypoint,
             vec!["100".to_string()],
             None::<&str>,
             None::<&str>,
         );
 
-        env.enter_function("main", "transfer");
-        env.record_function_call("main", "transfer", vec![], None::<&str>, None::<&str>);
+        env.enter_function(
+            "main",
+            "transfer",
+            crate::output::InvocationReason::Entrypoint,
+        );
+        env.record_function_call(
+            "main",
+            "transfer",
+            crate::output::InvocationReason::Entrypoint,
+            vec![],
+            None::<&str>,
+            None::<&str>,
+        );
 
         let transfers = env.get_function_calls_for("transfer");
         assert_eq!(transfers.len(), 2);
@@ -359,13 +457,28 @@ mod tests {
 
         assert_eq!(env.current_call_depth(), 0);
 
-        env.enter_function("main", "level1");
+        env.enter_function(
+            "main",
+            "level1",
+            crate::output::InvocationReason::Entrypoint,
+        );
         assert_eq!(env.current_call_depth(), 1);
 
-        env.enter_function("level1", "level2");
+        env.enter_function(
+            "level1",
+            "level2",
+            crate::output::InvocationReason::CrossContract,
+        );
         assert_eq!(env.current_call_depth(), 2);
 
-        env.record_function_call("level1", "level2", vec![], None::<&str>, None::<&str>);
+        env.record_function_call(
+            "level1",
+            "level2",
+            crate::output::InvocationReason::CrossContract,
+            vec![],
+            None::<&str>,
+            None::<&str>,
+        );
         assert_eq!(env.current_call_depth(), 1);
     }
 
@@ -373,7 +486,14 @@ mod tests {
     fn test_clear() {
         let mut env = DebugEnv::new();
         env.track_storage_read("key1");
-        env.record_function_call("main", "test", vec![], None::<&str>, None::<&str>);
+        env.record_function_call(
+            "main",
+            "test",
+            crate::output::InvocationReason::Entrypoint,
+            vec![],
+            None::<&str>,
+            None::<&str>,
+        );
 
         assert!(env.storage_access_count() > 0);
         assert!(env.function_call_count() > 0);
@@ -389,11 +509,17 @@ mod tests {
         let mut env = DebugEnv::new();
         env.track_storage_read("key1");
         env.track_storage_write("key2", "value");
-        env.enter_function("main", "test");
-        env.record_function_call("main", "test", vec![], None::<&str>, None::<&str>);
+        env.enter_function("main", "test", crate::output::InvocationReason::Entrypoint);
+        env.record_function_call(
+            "main",
+            "test",
+            crate::output::InvocationReason::Entrypoint,
+            vec![],
+            None::<&str>,
+            None::<&str>,
+        );
 
-        // enter_function increments call depth but not operation sequence
-        // only track_storage_* and record_function_call increment operation_sequence
-        assert_eq!(env.operation_count(), 3);
+        // track_storage_* / enter_function / record_function_call all increment the sequence.
+        assert_eq!(env.operation_count(), 4);
     }
 }

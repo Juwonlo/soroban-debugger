@@ -9,9 +9,9 @@ use crate::ui::formatter::Formatter;
 use crate::Result;
 use rustyline::completion::{Completer, Pair};
 use rustyline::error::ReadlineError;
-use rustyline::history::FileHistory;
 use rustyline::highlight::Highlighter;
 use rustyline::hint::Hinter;
+use rustyline::history::FileHistory;
 use rustyline::validate::{ValidationContext, ValidationResult, Validator};
 use rustyline::{Context, Editor, Helper};
 use std::path::PathBuf;
@@ -22,6 +22,7 @@ pub struct ReplSession {
     config: ReplConfig,
     executor: ReplExecutor,
     history_path: PathBuf,
+    save_history: bool,
 }
 
 #[derive(Clone)]
@@ -95,10 +96,7 @@ impl Hinter for ReplHelper {
 impl Highlighter for ReplHelper {}
 
 impl Validator for ReplHelper {
-    fn validate(
-        &self,
-        _ctx: &mut ValidationContext<'_>,
-    ) -> rustyline::Result<ValidationResult> {
+    fn validate(&self, _ctx: &mut ValidationContext<'_>) -> rustyline::Result<ValidationResult> {
         Ok(ValidationResult::Valid(None))
     }
 }
@@ -119,9 +117,22 @@ impl Completer for ReplHelper {
 impl ReplSession {
     /// Create a new REPL session
     pub fn new(config: ReplConfig) -> Result<Self> {
-        let history_path = dirs::home_dir()
-            .unwrap_or_else(std::env::temp_dir)
-            .join(".soroban_repl_history");
+        let global_config = crate::config::Config::load_or_default();
+        let save_history = global_config.repl.save_history.unwrap_or(true);
+
+        let history_path = if let Some(path) = global_config.repl.history_file {
+            PathBuf::from(path)
+        } else {
+            let history_base_dir = dirs::home_dir().unwrap_or_else(|| {
+                let fallback_dir = std::env::temp_dir();
+                tracing::warn!(
+                    "HOME directory is unavailable; REPL history will be stored in temporary directory: {}",
+                    fallback_dir.display()
+                );
+                fallback_dir
+            });
+            history_base_dir.join(".soroban_repl_history")
+        };
 
         let executor = ReplExecutor::new(&config)?;
         let helper = ReplHelper::new(
@@ -136,14 +147,17 @@ impl ReplSession {
             .map_err(|e| miette::miette!("Failed to initialize REPL editor: {}", e))?;
         editor.set_helper(Some(helper));
 
-        // Load history if it exists
-        let _ = editor.load_history(&history_path);
+        if save_history {
+            // Load history if it exists
+            let _ = editor.load_history(&history_path);
+        }
 
         Ok(ReplSession {
             editor,
             config,
             executor,
             history_path,
+            save_history,
         })
     }
 
@@ -152,6 +166,10 @@ impl ReplSession {
         self.print_welcome();
 
         loop {
+            if let Some(helper) = self.editor.helper_mut() {
+                helper.functions = self.executor.function_names();
+            }
+
             let prompt = format!(
                 "{}> ",
                 Formatter::info(
@@ -169,13 +187,27 @@ impl ReplSession {
                         continue;
                     }
 
-                    // Add to history
-                    let _ = self.editor.add_history_entry(line.clone());
+                    match ReplCommand::parse(&line) {
+                        Ok(cmd) => {
+                            if self.save_history && !cmd.is_sensitive() {
+                                let _ = self.editor.add_history_entry(line.clone());
+                            }
 
-                    match self.execute_command(&line).await {
-                        Ok(true) => break, // Exit requested
-                        Ok(false) => {}    // Continue
+                            match self.execute_parsed_command(cmd).await {
+                                Ok(true) => break, // Exit requested
+                                Ok(false) => {}    // Continue
+                                Err(e) => {
+                                    tracing::error!(
+                                        "{}",
+                                        Formatter::error(format!("Error: {}", e).as_str())
+                                    );
+                                }
+                            }
+                        }
                         Err(e) => {
+                            if self.save_history {
+                                let _ = self.editor.add_history_entry(line.clone());
+                            }
                             tracing::error!(
                                 "{}",
                                 Formatter::error(format!("Error: {}", e).as_str())
@@ -197,17 +229,18 @@ impl ReplSession {
             }
         }
 
-        // Save history
-        let _ = self.editor.save_history(&self.history_path);
+        if self.save_history {
+            // Save history
+            let _ = self.editor.save_history(&self.history_path);
+        }
 
         Ok(())
     }
 
-    /// Execute a single command
-    async fn execute_command(&mut self, line: &str) -> Result<bool> {
-        let cmd = ReplCommand::parse(line)?;
-
+    /// Execute a single parsed command
+    async fn execute_parsed_command(&mut self, cmd: ReplCommand) -> Result<bool> {
         match cmd {
+            ReplCommand::Noop => Ok(false),
             ReplCommand::Exit => Ok(true),
             ReplCommand::Help => {
                 self.print_help();
@@ -228,6 +261,63 @@ impl ReplSession {
             ReplCommand::Clear => {
                 // Print ANSI escape code to clear screen
                 print!("\x1B[2J\x1B[1;1H");
+                Ok(false)
+            }
+            ReplCommand::Break {
+                function,
+                condition,
+            } => {
+                self.executor
+                    .add_breakpoint(&function, condition.as_deref())?;
+                tracing::info!(
+                    "{}",
+                    Formatter::success(format!("Breakpoint set: {}", function).as_str())
+                );
+                Ok(false)
+            }
+            ReplCommand::ListBreaks => {
+                let breaks = self.executor.list_breakpoints();
+                if breaks.is_empty() {
+                    tracing::info!("{}", Formatter::info("No breakpoints set"));
+                } else {
+                    tracing::info!("{}", Formatter::success("Breakpoints:"));
+                    for bp in breaks {
+                        let cond = bp
+                            .condition
+                            .map(|c| format!(" (if {:?})", c))
+                            .unwrap_or_default();
+                        tracing::info!("  - {}{}", bp.function, cond);
+                    }
+                }
+                Ok(false)
+            }
+            ReplCommand::ClearBreak { function } => {
+                if self.executor.remove_breakpoint(&function) {
+                    tracing::info!(
+                        "{}",
+                        Formatter::success(format!("Breakpoint cleared: {}", function).as_str())
+                    );
+                } else {
+                    tracing::info!(
+                        "{}",
+                        Formatter::info(format!("No breakpoint found: {}", function).as_str())
+                    );
+                }
+                Ok(false)
+            }
+            ReplCommand::Functions => {
+                self.executor.display_functions()?;
+                Ok(false)
+            }
+            ReplCommand::Palette => {
+                tracing::info!(
+                    "{}",
+                    Formatter::info("Command palette opened. Type an action to run:")
+                );
+                tracing::info!("  export-trace");
+                tracing::info!("  add-breakpoint");
+                tracing::info!("  diagnostics");
+                tracing::info!("  export-storage");
                 Ok(false)
             }
         }
@@ -267,6 +357,26 @@ impl ReplSession {
             Formatter::info("help")
         );
         tracing::info!(
+            "  {} <func> [cond] Set a breakpoint with optional condition",
+            Formatter::info("break")
+        );
+        tracing::info!(
+            "  {}                 List all active breakpoints",
+            Formatter::info("list-breaks")
+        );
+        tracing::info!(
+            "  {} <func>         Clear a specific breakpoint",
+            Formatter::info("clear-break")
+        );
+        tracing::info!(
+            "  {}                 Show available contract functions",
+            Formatter::info("functions")
+        );
+        tracing::info!(
+            "  {}                   Open the command palette",
+            Formatter::info("palette")
+        );
+        tracing::info!(
             "  {}                     Exit the REPL",
             Formatter::info("exit")
         );
@@ -282,3 +392,7 @@ impl ReplSession {
         tracing::info!("");
     }
 }
+
+// Editing this code
+//I love writing beutiful code
+//I'm going to make this the best REPL session management code ever!

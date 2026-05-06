@@ -1,23 +1,65 @@
-import { ChildProcess, execFile, spawn } from 'child_process';
-import * as fs from 'fs';
-import * as net from 'net';
-import * as path from 'path';
+import { ChildProcess, execFile, spawn } from "child_process";
+import * as fs from "fs";
+import * as net from "net";
+import * as tls from "tls";
+import * as path from "path";
+import {
+  WIRE_PROTOCOL_MAX_VERSION,
+  WIRE_PROTOCOL_MIN_VERSION,
+} from "../dap/protocol";
+import { LogManager, LogLevel, LogPhase } from "../debug/logManager";
 
 export interface DebuggerProcessConfig {
   contractPath: string;
   snapshotPath?: string;
   entrypoint?: string;
-  args?: string[];
+  args?: unknown[];
   trace?: boolean;
   binaryPath?: string;
   port?: number;
+  /**
+   * Remote host to connect to when `spawnServer` is false (attach mode).
+   * Defaults to `"127.0.0.1"` for local-only connections.
+   */
+  host?: string;
   token?: string;
+  requestTimeoutMs?: number;
+  connectTimeoutMs?: number;
+  /**
+   * When false, `start()` will only connect to an already-running debugger server
+   * at `host`:`port` and will not spawn the CLI process.
+   *
+   * Set automatically when `request` is `"attach"` in `launch.json`.
+   * Intended for remote-attach workflows and tests.
+   */
+  spawnServer?: boolean;
+  storageFilter?: string[];
+  repeat?: number;
+  dryRun?: boolean;
+  showEvents?: boolean;
+  eventFilter?: string[];
+  mock?: string[];
+  /**
+   * Path to a TLS certificate file for secure server connections.
+   */
+  tlsCert?: string;
+  /**
+   * Path to a TLS private key file for secure server connections.
+   */
+  tlsKey?: string;
+  /**
+   * Path to a JSON file containing an array of argument sets for batch
+   * execution.  Each entry is passed as `args` to a separate Execute request.
+   */
+  batchArgs?: string;
 }
 
 export interface DebuggerExecutionResult {
   output: string;
   paused: boolean;
   completed: boolean;
+  sourceLocation?: SourceLocation;
+  pauseReason?: string;
 }
 
 export interface DebuggerInspection {
@@ -26,15 +68,141 @@ export interface DebuggerInspection {
   stepCount: number;
   paused: boolean;
   callStack: string[];
+  sourceLocation?: SourceLocation;
+  pauseReason?: string;
 }
 
 export interface DebuggerContinueResult {
   completed: boolean;
   output?: string;
   paused: boolean;
+  sourceLocation?: SourceLocation;
+  pauseReason?: string;
+}
+
+export interface DebuggerVersionInfo {
+  backendVersion: string;
+  protocolVersion: string;
+}
+
+export function getDebuggerVersionInfo(output: string): DebuggerVersionInfo {
+  const backendMatch = output.match(/backend[:=]\s*([^\s]+)/i);
+  const protocolMatch = output.match(/protocol[:=]\s*([^\s]+)/i);
+
+  return {
+    backendVersion: backendMatch?.[1] || "unknown",
+    protocolVersion: protocolMatch?.[1] || "unknown",
+  };
+}
+
+export interface BackendBreakpointCapabilities {
+  conditionalBreakpoints: boolean;
+  hitConditionalBreakpoints: boolean;
+  logPoints: boolean;
+}
+
+export interface SourceLocation {
+  file: string;
+  line: number;
+  column?: number;
+}
+
+export type LaunchPreflightQuickFix =
+  | "pickBinary"
+  | "pickContract"
+  | "pickSnapshot"
+  | "openLaunchConfig"
+  | "generateLaunchConfig"
+  | "openSettings";
+
+export interface LaunchPreflightIssue {
+  field:
+    | "binaryPath"
+    | "contractPath"
+    | "snapshotPath"
+    | "entrypoint"
+    | "args"
+    | "port"
+    | "host"
+    | "token"
+    | "batchArgs"
+    | "showEvents"
+    | "eventFilter"
+    | "mock"
+    | "tlsCert"
+    | "tlsKey";
+  message: string;
+  expected: string;
+  quickFixes: LaunchPreflightQuickFix[];
+}
+
+export interface LaunchPreflightResult {
+  ok: boolean;
+  issues: LaunchPreflightIssue[];
+  resolvedBinaryPath: string;
+}
+
+export type LaunchLifecyclePhase =
+  | "spawn"
+  | "connect"
+  | "authenticate"
+  | "load"
+  | "ready";
+export type LaunchLifecycleStatus = "started" | "completed" | "failed";
+
+export interface LaunchLifecycleEvent {
+  phase: LaunchLifecyclePhase;
+  status: LaunchLifecycleStatus;
+  message: string;
+}
+
+export class DebuggerTimeoutError extends Error {
+  name = "DebuggerTimeoutError";
+
+  constructor(
+    public readonly requestType: string,
+    public readonly timeoutMs: number,
+  ) {
+    super(`${requestType} timed out after ${timeoutMs}ms`);
+  }
+}
+
+type ProtocolMismatchDetails = {
+  extensionVersion: string;
+  backendName?: string;
+  backendVersion?: string;
+  backendProtocolMin?: number;
+  backendProtocolMax?: number;
+  extra?: string;
+};
+
+export function formatProtocolMismatchMessage(
+  details: ProtocolMismatchDetails,
+): string {
+  const backendIdentity =
+    details.backendName && details.backendVersion
+      ? `${details.backendName} ${details.backendVersion}`
+      : "the backend debugger";
+  const backendProtocol =
+    Number.isInteger(details.backendProtocolMin) &&
+    Number.isInteger(details.backendProtocolMax)
+      ? `${details.backendProtocolMin}..=${details.backendProtocolMax}`
+      : "unknown";
+  const extra = details.extra ? ` Details: ${details.extra}` : "";
+
+  return [
+    `Protocol negotiation with ${backendIdentity} failed.`,
+    `Extension version: ${details.extensionVersion}.`,
+    `Backend supports protocol ${backendProtocol}.`,
+    "Remediation: rebuild or update the soroban-debug CLI and the VS Code extension so they come from the same revision.",
+    extra.trim(),
+  ]
+    .filter(Boolean)
+    .join(" ");
 }
 
 type DebugRequest =
+  | { type: 'Handshake'; client_name: string; client_version: string; protocol_min: number; protocol_max: number; session_label?: string }
   | { type: 'Authenticate'; token: string }
   | { type: 'LoadContract'; contract_path: string }
   | { type: 'Execute'; function: string; args?: string }
@@ -44,28 +212,107 @@ type DebugRequest =
   | { type: 'Continue' }
   | { type: 'Inspect' }
   | { type: 'GetStorage' }
-  | { type: 'SetBreakpoint'; function: string }
-  | { type: 'ClearBreakpoint'; function: string }
+  | { type: 'SetBreakpoint'; id?: string; function: string; condition?: string; hit_condition?: string; log_message?: string }
+  | { type: 'ClearBreakpoint'; id?: string; function?: string }
+  | { type: 'ResolveSourceBreakpoints'; source_path: string; lines: number[] }
   | { type: 'Evaluate'; expression: string; frame_id?: number }
+  | { type: 'Cancel' }
   | { type: 'Ping' }
   | { type: 'Disconnect' }
-  | { type: 'LoadSnapshot'; snapshot_path: string };
+  | { type: 'LoadSnapshot'; snapshot_path: string }
+  | { type: 'GetCapabilities' }
+  | { type: 'GetEvents' }
+  | { type: 'Unknown' };
 
 type DebugResponse =
-  | { type: 'Authenticated'; success: boolean; message: string }
-  | { type: 'ContractLoaded'; size: number }
-  | { type: 'ExecutionResult'; success: boolean; output: string; error?: string; paused: boolean; completed: boolean }
-  | { type: 'StepResult'; paused: boolean; current_function?: string; step_count: number }
-  | { type: 'ContinueResult'; completed: boolean; output?: string; error?: string; paused: boolean }
-  | { type: 'InspectionResult'; function?: string; args?: string; step_count: number; paused: boolean; call_stack: string[] }
-  | { type: 'StorageState'; storage_json: string }
-  | { type: 'SnapshotLoaded'; summary: string }
-  | { type: 'BreakpointSet'; function: string }
-  | { type: 'BreakpointCleared'; function: string }
-  | { type: 'EvaluateResult'; result: string; result_type?: string; variables_reference: number }
-  | { type: 'Pong' }
-  | { type: 'Disconnected' }
-  | { type: 'Error'; message: string };
+  | {
+      type: "HandshakeAck";
+      server_name: string;
+      server_version: string;
+      protocol_min: number;
+      protocol_max: number;
+      selected_version: number;
+      session_id?: string;
+      session_created_at?: string;
+      session_label?: string;
+    }
+  | {
+      type: "IncompatibleProtocol";
+      message: string;
+      server_name: string;
+      server_version: string;
+      protocol_min: number;
+      protocol_max: number;
+    }
+  | { type: "Authenticated"; success: boolean; message: string }
+  | { type: "ContractLoaded"; size: number }
+  | {
+      type: "ExecutionResult";
+      success: boolean;
+      output: string;
+      error?: string;
+      paused: boolean;
+      completed: boolean;
+      pause_reason?: string;
+    }
+  | {
+      type: "StepResult";
+      paused: boolean;
+      current_function?: string;
+      step_count: number;
+      pause_reason?: string;
+    }
+  | {
+      type: "ContinueResult";
+      completed: boolean;
+      output?: string;
+      error?: string;
+      paused: boolean;
+      pause_reason?: string;
+    }
+  | {
+      type: "InspectionResult";
+      function?: string;
+      args?: string;
+      step_count: number;
+      paused: boolean;
+      call_stack: string[];
+      pause_reason?: string;
+    }
+  | { type: "StorageState"; storage_json: string }
+  | { type: "SnapshotLoaded"; summary: string }
+  | { type: "BreakpointSet"; function: string }
+  | { type: "BreakpointCleared"; function: string }
+  | {
+      type: "SourceBreakpointsResolved";
+      breakpoints: Array<{
+        requested_line: number;
+        line: number;
+        verified: boolean;
+        function?: string;
+        reason_code: string;
+        message: string;
+      }>;
+    }
+  | {
+      type: "EvaluateResult";
+      result: string;
+      result_type?: string;
+      variables_reference: number;
+    }
+  | {
+      type: "Capabilities";
+      breakpoints: {
+        conditional_breakpoints: boolean;
+        hit_conditional_breakpoints: boolean;
+        log_points: boolean;
+      };
+    }
+  | { type: "Pong" }
+  | { type: "EventsList"; events: any[] }
+  | { type: "Disconnected" }
+  | { type: "Unknown" }
+  | { type: "Error"; message: string };
 
 type DebugMessage = {
   id: number;
@@ -76,199 +323,448 @@ type DebugMessage = {
 type PendingRequest = {
   resolve: (response: DebugResponse) => void;
   reject: (error: Error) => void;
+  cleanup: () => void;
 };
 
+type RequestOptions = {
+  signal?: AbortSignal;
+  timeoutMs?: number;
+};
+
+class RequestAbortedError extends Error {
+  name = "AbortError";
+  constructor(message = "Request aborted") {
+    super(message);
+  }
+}
+
 export class DebuggerProcess {
-  private process: ChildProcess | null = null;
+  private childProcess: ChildProcess | null = null;
   private socket: net.Socket | null = null;
-  private buffer = '';
+  private buffer = "";
   private requestId = 0;
   private pendingRequests = new Map<number, PendingRequest>();
   private config: DebuggerProcessConfig;
+  private logManager: LogManager | undefined;
   private port: number | null = null;
+  private negotiatedProtocolVersion: number | null = null;
+  private defaultRequestTimeoutMs: number;
+  private defaultConnectTimeoutMs: number;
+  private launchLifecycleReporter?: (event: LaunchLifecycleEvent) => void;
 
-  constructor(config: DebuggerProcessConfig) {
+  constructor(
+    config: DebuggerProcessConfig,
+    logManager?: LogManager,
+    launchLifecycleReporter?: (event: LaunchLifecycleEvent) => void,
+  ) {
     this.config = config;
+    this.logManager = logManager;
+    this.launchLifecycleReporter = launchLifecycleReporter;
+
+    const envRequestTimeout = Number(
+      process.env.SOROBAN_DEBUG_REQUEST_TIMEOUT_MS,
+    );
+    const envConnectTimeout = Number(
+      process.env.SOROBAN_DEBUG_CONNECT_TIMEOUT_MS,
+    );
+
+    this.defaultRequestTimeoutMs = Number.isFinite(config.requestTimeoutMs)
+      ? Number(config.requestTimeoutMs)
+      : Number.isFinite(envRequestTimeout)
+        ? envRequestTimeout
+        : 30_000;
+
+    this.defaultConnectTimeoutMs = Number.isFinite(config.connectTimeoutMs)
+      ? Number(config.connectTimeoutMs)
+      : Number.isFinite(envConnectTimeout)
+        ? envConnectTimeout
+        : 10_000;
+  }
+
+  public cancel(): void {
+    if (!this.childProcess || this.childProcess.killed) return;
+    this.sendRequest({ type: "Cancel" }).catch(() => {
+      // Ignore network errors since the server dropping the connection
+      // is the expected behavior for an interrupted execution
+    });
   }
 
   async start(): Promise<void> {
-    if (this.process || this.socket) {
+    if (this.childProcess || this.socket) {
       return;
     }
 
-    const binaryPath = this.resolveBinaryPath();
-    const port = this.config.port ?? await this.findAvailablePort();
+    const shouldSpawnServer = this.config.spawnServer !== false;
+    const binaryPath = shouldSpawnServer
+      ? resolveDebuggerBinaryPath(this.config)
+      : null;
+    const port = this.config.port ?? (await this.findAvailablePort());
     this.port = port;
+    let activePhase: LaunchLifecyclePhase = shouldSpawnServer
+      ? "spawn"
+      : "connect";
 
-    const child = spawn(binaryPath, this.buildArgs(port), {
-      stdio: ['ignore', 'pipe', 'pipe'],
-      env: {
-        ...process.env,
-        ...(this.config.trace ? { RUST_LOG: 'debug' } : {})
+    try {
+      if (shouldSpawnServer) {
+        const child = spawn(binaryPath as string, this.buildArgs(port), {
+          stdio: ["ignore", "pipe", "pipe"],
+          env: {
+            ...process.env,
+            ...(this.config.trace ? { RUST_LOG: "debug" } : {}),
+          },
+        });
+        this.childProcess = child;
+        // Always drain child output streams to prevent pipe backpressure from
+        // blocking the debugger server process.
+        child.stdout?.resume();
+        child.stderr?.resume();
+
+        child.once("exit", () => {
+          this.rejectPendingRequests(new Error("Debugger server exited"));
+          this.socket?.destroy();
+          this.socket = null;
+        });
+      } else if (!this.config.port) {
+        throw new Error(
+          "DebuggerProcessConfig.port is required when spawnServer is false",
+        );
       }
-    });
-    this.process = child;
 
-    child.once('exit', () => {
-      this.rejectPendingRequests(new Error('Debugger server exited'));
-      this.socket?.destroy();
-      this.socket = null;
-    });
-
-    await this.waitForServer(port);
-    await this.connect(port);
-
-    if (this.config.token) {
-      const response = await this.sendRequest({
-        type: 'Authenticate',
-        token: this.config.token
+      activePhase = "connect";
+      this.emitLaunchLifecycle({
+        phase: "connect",
+        status: "started",
+        message: `Connecting to debugger server on ${this.config.host ?? "127.0.0.1"}:${port}...`,
       });
-      this.expectResponse(response, 'Authenticated');
-      if (!response.success) {
-        throw new Error(response.message);
+      await this.waitForServer(port);
+      this.logManager?.log(
+        LogLevel.Info,
+        LogPhase.Connect,
+        `Connecting to debugger server on ${this.config.host ?? "127.0.0.1"}:${port}...`,
+      );
+      await this.connect(port);
+      this.logManager?.log(
+        LogLevel.Info,
+        LogPhase.Connect,
+        "Connection established. Negotiating protocol...",
+      );
+      await this.negotiateProtocol();
+      this.logManager?.log(
+        LogLevel.Info,
+        LogPhase.Connect,
+        `Protocol negotiated: ${this.negotiatedProtocolVersion || "unknown"}`,
+      );
+      this.emitLaunchLifecycle({
+        phase: "connect",
+        status: "completed",
+        message: `Connected to debugger server on ${this.config.host ?? "127.0.0.1"}:${port}.`,
+      });
+
+      if (this.config.token) {
+        activePhase = "authenticate";
+        this.emitLaunchLifecycle({
+          phase: "authenticate",
+          status: "started",
+          message: "Authenticating debugger session...",
+        });
+        this.logManager?.log(
+          LogLevel.Info,
+          LogPhase.Auth,
+          "Authenticating with token...",
+        );
+        const response = await this.sendRequest({
+          type: "Authenticate",
+          token: this.config.token,
+        });
+        this.expectResponse(response, "Authenticated");
+        if (!response.success) {
+          throw new Error(response.message);
+        }
+        this.emitLaunchLifecycle({
+          phase: "authenticate",
+          status: "completed",
+          message: "Debugger session authenticated.",
+        });
       }
-    }
 
-    if (this.config.snapshotPath) {
-      const response = await this.sendRequest({
-        type: 'LoadSnapshot',
-        snapshot_path: this.config.snapshotPath
+      activePhase = "load";
+      this.emitLaunchLifecycle({
+        phase: "load",
+        status: "started",
+        message: this.config.snapshotPath
+          ? "Loading snapshot and contract into debugger..."
+          : "Loading contract into debugger...",
       });
-      this.expectResponse(response, 'SnapshotLoaded');
-    }
+      if (this.config.snapshotPath) {
+        this.logManager?.log(
+          LogLevel.Info,
+          LogPhase.Load,
+          `Loading snapshot: ${this.config.snapshotPath}`,
+        );
+        const response = await this.sendRequest({
+          type: "LoadSnapshot",
+          snapshot_path: this.config.snapshotPath,
+        });
+        this.expectResponse(response, "SnapshotLoaded");
+      }
 
-    const contractResponse = await this.sendRequest({
-      type: 'LoadContract',
-      contract_path: this.config.contractPath
-    });
-    this.expectResponse(contractResponse, 'ContractLoaded');
+      this.logManager?.log(
+        LogLevel.Info,
+        LogPhase.Load,
+        `Loading contract: ${this.config.contractPath}`,
+      );
+      const contractResponse = await this.sendRequest({
+        type: "LoadContract",
+        contract_path: this.config.contractPath,
+      });
+      this.expectResponse(contractResponse, "ContractLoaded");
+      this.emitLaunchLifecycle({
+        phase: "load",
+        status: "completed",
+        message: "Snapshot and contract loaded.",
+      });
+      activePhase = "ready";
+      this.emitLaunchLifecycle({
+        phase: "ready",
+        status: "completed",
+        message: "Debugger is ready.",
+      });
+    } catch (error) {
+      this.emitLaunchLifecycle({
+        phase: activePhase,
+        status: "failed",
+        message: error instanceof Error ? error.message : String(error),
+      });
+      await this.stop().catch(() => undefined);
+      throw error;
+    }
   }
 
   async execute(): Promise<DebuggerExecutionResult> {
     const response = await this.sendRequest({
-      type: 'Execute',
-      function: this.config.entrypoint || 'main',
-      args: this.config.args && this.config.args.length > 0
-        ? JSON.stringify(this.config.args)
-        : undefined
+      type: "Execute",
+      function: this.config.entrypoint || "main",
+      args:
+        this.config.args && this.config.args.length > 0
+          ? JSON.stringify(this.config.args)
+          : undefined,
     });
-    this.expectResponse(response, 'ExecutionResult');
+    this.expectResponse(response, "ExecutionResult");
 
     if (!response.success) {
-      throw new Error(response.error || 'Execution failed');
+      throw new Error(response.error || "Execution failed");
     }
 
     return {
       output: response.output,
       paused: response.paused,
-      completed: response.completed
+      completed: response.completed,
+      pauseReason: response.pause_reason,
     };
   }
 
-  async stepIn(): Promise<{ paused: boolean; current_function?: string; step_count: number }> {
-    const response = await this.sendRequest({ type: 'StepIn' });
-    this.expectResponse(response, 'StepResult');
+  async executeBatch(
+    batchItems: unknown[][]
+  ): Promise<{ index: number; args: unknown[]; output: string; success: boolean; error?: string }[]> {
+    const results: { index: number; args: unknown[]; output: string; success: boolean; error?: string }[] = [];
+    const entrypoint = this.config.entrypoint || "main";
+
+    for (let i = 0; i < batchItems.length; i++) {
+      const args = batchItems[i];
+      try {
+        const response = await this.sendRequest({
+          type: "Execute",
+          function: entrypoint,
+          args: args.length > 0 ? JSON.stringify(args) : undefined,
+        });
+        this.expectResponse(response, "ExecutionResult");
+        results.push({
+          index: i,
+          args,
+          output: response.output || "",
+          success: response.success !== false,
+          error: response.error,
+        });
+      } catch (err) {
+        results.push({
+          index: i,
+          args,
+          output: "",
+          success: false,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
+    return results;
+  }
+
+  async stepIn(): Promise<{
+    paused: boolean;
+    current_function?: string;
+    step_count: number;
+    pause_reason?: string;
+  }> {
+    const response = await this.sendRequest({ type: "StepIn" });
+    this.expectResponse(response, "StepResult");
     return response as any;
   }
 
-  async next(): Promise<{ paused: boolean; current_function?: string; step_count: number }> {
-    const response = await this.sendRequest({ type: 'Next' });
-    this.expectResponse(response, 'StepResult');
+  async next(): Promise<{
+    paused: boolean;
+    current_function?: string;
+    step_count: number;
+    pause_reason?: string;
+  }> {
+    const response = await this.sendRequest({ type: "Next" });
+    this.expectResponse(response, "StepResult");
     return response as any;
   }
 
-  async stepOut(): Promise<{ paused: boolean; current_function?: string; step_count: number }> {
-    const response = await this.sendRequest({ type: 'StepOut' });
-    this.expectResponse(response, 'StepResult');
+  async stepOut(): Promise<{
+    paused: boolean;
+    current_function?: string;
+    step_count: number;
+    pause_reason?: string;
+  }> {
+    const response = await this.sendRequest({ type: "StepOut" });
+    this.expectResponse(response, "StepResult");
     return response as any;
   }
 
   async continueExecution(): Promise<DebuggerContinueResult> {
-    const response = await this.sendRequest({ type: 'Continue' });
-    this.expectResponse(response, 'ContinueResult');
+    const response = await this.sendRequest({ type: "Continue" });
+    this.expectResponse(response, "ContinueResult");
     if (response.error) {
       throw new Error(response.error);
     }
     return {
       completed: response.completed,
       output: response.output,
-      paused: response.paused
+      paused: response.paused,
+      pauseReason: response.pause_reason,
     };
   }
 
-  async inspect(): Promise<DebuggerInspection> {
-    const response = await this.sendRequest({ type: 'Inspect' });
-    this.expectResponse(response, 'InspectionResult');
+  async inspect(options?: RequestOptions): Promise<DebuggerInspection> {
+    const response = await this.sendRequest({ type: "Inspect" }, options);
+    this.expectResponse(response, "InspectionResult");
     return {
       function: response.function,
       args: response.args,
       stepCount: response.step_count,
       paused: response.paused,
-      callStack: response.call_stack
+      callStack: response.call_stack,
+      pauseReason: response.pause_reason,
     };
   }
 
-  async getStorage(): Promise<Record<string, unknown>> {
-    const response = await this.sendRequest({ type: 'GetStorage' });
-    this.expectResponse(response, 'StorageState');
+  async getStorage(options?: RequestOptions): Promise<Record<string, unknown>> {
+    const response = await this.sendRequest({ type: "GetStorage" }, options);
+    this.expectResponse(response, "StorageState");
     const parsed = JSON.parse(response.storage_json);
-    if (parsed && typeof parsed === 'object') {
+    if (parsed && typeof parsed === "object") {
       return parsed as Record<string, unknown>;
     }
     return {};
   }
 
-  async ping(): Promise<void> {
-    const response = await this.sendRequest({ type: 'Ping' });
-    this.expectResponse(response, 'Pong');
+  async getEvents(options?: RequestOptions): Promise<any[]> {
+    const response = await this.sendRequest({ type: "GetEvents" }, options);
+    this.expectResponse(response, "EventsList");
+    return response.events || [];
   }
 
-  async setBreakpoint(functionName: string): Promise<void> {
+  async ping(): Promise<void> {
+    const response = await this.sendRequest({ type: "Ping" });
+    this.expectResponse(response, "Pong");
+  }
+
+  async getCapabilities(): Promise<BackendBreakpointCapabilities> {
+    const response = await this.sendRequest({ type: "GetCapabilities" });
+    this.expectResponse(response, "Capabilities");
+    return {
+      conditionalBreakpoints: response.breakpoints.conditional_breakpoints,
+      hitConditionalBreakpoints:
+        response.breakpoints.hit_conditional_breakpoints,
+      logPoints: response.breakpoints.log_points,
+    };
+  }
+
+  async setBreakpoint(breakpoint: {
+    id: string;
+    functionName: string;
+    condition?: string;
+    hitCondition?: string;
+    logMessage?: string;
+  }): Promise<void> {
     const response = await this.sendRequest({
-      type: 'SetBreakpoint',
-      function: functionName
-    });
+      type: "SetBreakpoint",
+      id: breakpoint.id,
+      function: breakpoint.functionName,
+      condition: breakpoint.condition,
+      hit_condition: breakpoint.hitCondition,
+      log_message: breakpoint.logMessage
+    }as any);
     this.expectResponse(response, 'BreakpointSet');
   }
 
-  async clearBreakpoint(functionName: string): Promise<void> {
+  async clearBreakpoint(breakpointId: string): Promise<void> {
     const response = await this.sendRequest({
       type: 'ClearBreakpoint',
-      function: functionName
-    });
+      id: breakpointId
+    } as any);
     this.expectResponse(response, 'BreakpointCleared');
   }
 
-  async evaluate(expression: string, frameId?: number): Promise<{ result: string; type?: string; variablesReference: number }> {
-    const response = await this.sendRequest({
-      type: 'Evaluate',
-      expression,
-      frame_id: frameId
-    });
-    this.expectResponse(response, 'EvaluateResult');
+  async evaluate(
+    expression: string,
+    frameId?: number,
+    options?: RequestOptions,
+  ): Promise<{ result: string; type?: string; variablesReference: number }> {
+    const response = await this.sendRequest(
+      {
+        type: "Evaluate",
+        expression,
+        frame_id: frameId,
+      },
+      options,
+    );
+    this.expectResponse(response, "EvaluateResult");
     return {
       result: response.result,
       type: response.result_type,
-      variablesReference: response.variables_reference
+      variablesReference: response.variables_reference,
     };
   }
 
   async getContractFunctions(): Promise<Set<string>> {
-    const binaryPath = this.resolveBinaryPath();
+    const binaryPath = resolveDebuggerBinaryPath(this.config);
 
     const output = await new Promise<string>((resolve, reject) => {
-      execFile(
+      const child = execFile(
         binaryPath,
-        ['inspect', '--contract', this.config.contractPath, '--functions'],
+        ["inspect", "--contract", this.config.contractPath, "--functions"],
         { env: process.env },
-        (error, stdout, stderr) => {
+        (error: Error | null, stdout: string, stderr: string) => {
+          clearTimeout(timer);
           if (error) {
             reject(new Error(stderr || stdout || String(error)));
             return;
           }
           resolve(stdout);
-        }
+        },
       );
+
+      const timer = setTimeout(() => {
+        child.kill();
+        reject(
+          new DebuggerTimeoutError(
+            "InspectFunctions",
+            this.defaultRequestTimeoutMs,
+          ),
+        );
+      }, this.defaultRequestTimeoutMs);
     });
 
     const functions = new Set<string>();
@@ -282,104 +778,160 @@ export class DebuggerProcess {
     return functions;
   }
 
+  async resolveSourceBreakpoints(
+    sourcePath: string,
+    lines: number[],
+    options?: RequestOptions,
+  ): Promise<
+    Array<{
+      requestedLine: number;
+      line: number;
+      verified: boolean;
+      functionName?: string;
+      reasonCode: string;
+      message: string;
+    }>
+  > {
+    const response = await this.sendRequest(
+      {
+        type: "ResolveSourceBreakpoints",
+        source_path: sourcePath,
+        lines,
+      },
+      options,
+    );
+
+    this.expectResponse(response, "SourceBreakpointsResolved");
+
+    return response.breakpoints.map((bp) => ({
+      requestedLine: bp.requested_line,
+      line: bp.line,
+      verified: bp.verified,
+      functionName: bp.function,
+      reasonCode: bp.reason_code,
+      message: bp.message,
+    }));
+  }
+
   async stop(): Promise<void> {
     try {
       if (this.socket && !this.socket.destroyed) {
-        await this.sendRequest({ type: 'Disconnect' }).catch(() => undefined);
+        await this.sendRequest({ type: "Disconnect" }).catch(() => undefined);
       }
     } finally {
       this.socket?.destroy();
       this.socket = null;
     }
 
-    if (!this.process) {
+    if (!this.childProcess) {
       return;
     }
 
-    if (this.process.killed) {
-      this.process = null;
+    if (this.childProcess.killed) {
+      this.childProcess = null;
       return;
     }
 
     await new Promise<void>((resolve) => {
-      if (!this.process) {
+      if (!this.childProcess) {
         resolve();
         return;
       }
 
-      const child = this.process;
+      const child = this.childProcess;
       const timeout = setTimeout(() => {
         if (!child.killed) {
-          child.kill('SIGKILL');
+          child.kill("SIGKILL");
         }
       }, 5000);
 
-      child.once('exit', () => {
+      child.once("exit", () => {
         clearTimeout(timeout);
         resolve();
       });
-      child.kill('SIGTERM');
+      child.kill("SIGTERM");
     });
 
-    this.process = null;
-  }
-
-  getInputStream() {
-    return null;
+    this.childProcess = null;
   }
 
   getOutputStream() {
-    return this.process?.stdout;
+    return this.childProcess?.stdout;
   }
 
   getErrorStream() {
-    return this.process?.stderr;
+    return this.childProcess?.stderr;
   }
 
   private buildArgs(port: number): string[] {
-    const args = ['server', '--port', String(port)];
+    const args = ["server", "--port", String(port)];
 
     if (this.config.token) {
-      args.push('--token', this.config.token);
+      args.push("--token", this.config.token);
+    }
+
+    if (this.config.tlsCert && this.config.tlsKey) {
+      args.push("--tls-cert", this.config.tlsCert);
+      args.push("--tls-key", this.config.tlsKey);
+    } else if (this.config.tlsCert || this.config.tlsKey) {
+      throw new Error(
+        "Both 'tlsCert' and 'tlsKey' must be provided in launch configuration to enable TLS support for the debugger server.",
+      );
+    }
+
+    if (this.config.dryRun) {
+      args.push("--dry-run");
+    }
+
+    if (this.config.storageFilter && this.config.storageFilter.length > 0) {
+      for (const filter of this.config.storageFilter) {
+        args.push("--storage-filter", filter);
+      }
+    }
+
+    if (this.config.repeat && this.config.repeat > 1) {
+      args.push("--repeat", String(this.config.repeat));
+    }
+
+    if (this.config.showEvents) {
+      args.push("--show-events");
+    }
+
+    if (this.config.eventFilter && this.config.eventFilter.length > 0) {
+      for (const filter of this.config.eventFilter) {
+        args.push("--event-filter", filter);
+      }
+    }
+
+    if (this.config.mock && this.config.mock.length > 0) {
+      for (const spec of this.config.mock) {
+        args.push("--mock", spec);
+      }
     }
 
     return args;
   }
 
   isRunning(): boolean {
-    return this.process !== null && this.socket !== null && !this.socket.destroyed;
-  }
-
-  private resolveBinaryPath(): string {
-    if (this.config.binaryPath) {
-      return this.config.binaryPath;
-    }
-
-    if (process.env.SOROBAN_DEBUG_BIN) {
-      return process.env.SOROBAN_DEBUG_BIN;
-    }
-
-    const repoRoot = path.resolve(__dirname, '..', '..', '..', '..');
-    const candidates = [
-      path.join(repoRoot, 'target', 'debug', process.platform === 'win32' ? 'soroban-debug.exe' : 'soroban-debug'),
-      process.platform === 'win32' ? 'soroban-debug.exe' : 'soroban-debug'
-    ];
-
-    return candidates.find(candidate => fs.existsSync(candidate)) || candidates[candidates.length - 1];
+    return (
+      this.childProcess !== null &&
+      this.socket !== null &&
+      !this.socket.destroyed
+    );
   }
 
   private async findAvailablePort(): Promise<number> {
     return await new Promise<number>((resolve, reject) => {
       const server = net.createServer();
-      server.listen(0, '127.0.0.1', () => {
+      server.listen(0, "127.0.0.1", () => {
         const address = server.address();
-        if (!address || typeof address === 'string') {
-          reject(new Error('Failed to determine an available port'));
+        if (!address || typeof address === "string") {
+          reject(new Error("Failed to determine an available port"));
           return;
         }
 
         const port = address.port;
-        server.close((error) => {
+        server.close((error: Error | undefined) => {
           if (error) {
             reject(error);
             return;
@@ -387,36 +939,39 @@ export class DebuggerProcess {
           resolve(port);
         });
       });
-      server.on('error', reject);
+      server.on("error", reject);
     });
   }
 
   private async waitForServer(port: number): Promise<void> {
-    const deadline = Date.now() + 10000;
+    const deadline = Date.now() + this.defaultConnectTimeoutMs;
 
     while (Date.now() < deadline) {
-      if (this.process && this.process.exitCode !== null) {
-        throw new Error(`Debugger server exited with code ${this.process.exitCode}`);
+      if (this.childProcess && this.childProcess.exitCode !== null) {
+        throw new Error(
+          `Debugger server exited with code ${this.childProcess.exitCode}`,
+        );
       }
 
       if (await this.canConnect(port)) {
         return;
       }
 
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 100));
     }
 
-    throw new Error(`Timed out waiting for debugger server on port ${port}`);
+    throw new Error(`Timed out waiting for debugger server on ${this.config.host ?? "127.0.0.1"}:${port}`);
   }
 
   private async canConnect(port: number): Promise<boolean> {
+    const host = this.config.host ?? "127.0.0.1";
     return await new Promise<boolean>((resolve) => {
-      const socket = net.createConnection({ host: '127.0.0.1', port }, () => {
+      const socket = net.createConnection({ host, port }, () => {
         socket.destroy();
         resolve(true);
       });
 
-      socket.on('error', () => {
+      socket.on("error", () => {
         socket.destroy();
         resolve(false);
       });
@@ -424,20 +979,38 @@ export class DebuggerProcess {
   }
 
   private async connect(port: number): Promise<void> {
-    await new Promise<void>((resolve, reject) => {
-      const socket = net.createConnection({ host: '127.0.0.1', port }, () => {
-        this.socket = socket;
-        resolve();
-      });
+    const host = this.config.host ?? "127.0.0.1";
+    const useTls = !!(this.config.tlsCert && this.config.tlsKey);
 
-      socket.setEncoding('utf8');
-      socket.on('data', (chunk: string) => {
+    await new Promise<void>((resolve, reject) => {
+      let socket: net.Socket;
+      if (useTls) {
+        // If the user provided a cert/key for the server, the client (us)
+        // should connect via TLS. For now, we allow unauthorized certificates
+        // since they are likely self-signed for local development.
+        socket = tls.connect({
+          host,
+          port,
+          rejectUnauthorized: false,
+        }, () => {
+          this.socket = socket;
+          resolve();
+        });
+      } else {
+        socket = net.createConnection({ host, port }, () => {
+          this.socket = socket;
+          resolve();
+        });
+      }
+
+      socket.setEncoding("utf8");
+      socket.on("data", (chunk: string) => {
         this.buffer += chunk;
         this.consumeMessages();
       });
-      socket.on('error', reject);
-      socket.on('close', () => {
-        this.rejectPendingRequests(new Error('Debugger connection closed'));
+      socket.on("error", reject);
+      socket.on("close", () => {
+        this.rejectPendingRequests(new Error("Debugger connection closed"));
         this.socket = null;
       });
     });
@@ -445,7 +1018,7 @@ export class DebuggerProcess {
 
   private consumeMessages(): void {
     while (true) {
-      const newlineIndex = this.buffer.indexOf('\n');
+      const newlineIndex = this.buffer.indexOf("\n");
       if (newlineIndex === -1) {
         return;
       }
@@ -457,20 +1030,38 @@ export class DebuggerProcess {
         continue;
       }
 
-      const message = JSON.parse(line) as DebugMessage;
+      let message: DebugMessage;
+      try {
+        message = JSON.parse(line) as DebugMessage;
+      } catch (err) {
+        this.logManager?.log(
+          LogLevel.Error,
+          LogPhase.Connect,
+          `Failed to parse backend message: ${err}\nLine: ${line}`,
+        );
+        continue;
+      }
       const pending = this.pendingRequests.get(message.id);
       if (!pending || !message.response) {
         continue;
       }
 
       this.pendingRequests.delete(message.id);
+      pending.cleanup();
       pending.resolve(message.response);
     }
   }
 
-  private async sendRequest(request: DebugRequest): Promise<DebugResponse> {
+  private async sendRequest(
+    request: DebugRequest,
+    options?: RequestOptions,
+  ): Promise<DebugResponse> {
     if (!this.socket) {
-      throw new Error('Debugger connection is not established');
+      throw new Error("Debugger connection is not established");
+    }
+
+    if (options?.signal?.aborted) {
+      throw new RequestAbortedError();
     }
 
     this.requestId += 1;
@@ -478,30 +1069,625 @@ export class DebuggerProcess {
     const message: DebugMessage = { id, request };
 
     const responsePromise = new Promise<DebugResponse>((resolve, reject) => {
-      this.pendingRequests.set(id, { resolve, reject });
+      const cleanup = () => {
+        if (timeout) {
+          clearTimeout(timeout);
+          timeout = undefined;
+        }
+        if (abortHandler && options?.signal) {
+          options.signal.removeEventListener("abort", abortHandler);
+        }
+      };
+
+      let timeout: NodeJS.Timeout | undefined;
+      let abortHandler: (() => void) | undefined;
+
+      const timeoutMs = options?.timeoutMs ?? this.defaultRequestTimeoutMs;
+
+      if (timeoutMs > 0) {
+        timeout = setTimeout(() => {
+          const pending = this.pendingRequests.get(id);
+          if (!pending) {
+            return;
+          }
+          this.pendingRequests.delete(id);
+          pending.cleanup();
+          pending.reject(new DebuggerTimeoutError(request.type, timeoutMs));
+        }, timeoutMs);
+      }
+
+      if (options?.signal) {
+        abortHandler = () => {
+          const pending = this.pendingRequests.get(id);
+          if (!pending) {
+            return;
+          }
+          this.pendingRequests.delete(id);
+          pending.cleanup();
+          pending.reject(new RequestAbortedError());
+        };
+        options.signal.addEventListener("abort", abortHandler, { once: true });
+      }
+
+      this.pendingRequests.set(id, { resolve, reject, cleanup });
     });
 
+    this.logManager?.log(
+      LogLevel.Debug,
+      LogPhase.Connect,
+      `Backend request [${id}]: ${JSON.stringify(request)}`,
+    );
     this.socket.write(`${JSON.stringify(message)}\n`);
     const response = await responsePromise;
-    if (response.type === 'Error') {
+    if (response.type === "Error") {
       throw new Error(response.message);
     }
     return response;
   }
 
+  private getExtensionVersion(): string {
+    try {
+      const packageJsonPath = path.resolve(
+        __dirname,
+        "..",
+        "..",
+        "package.json",
+      );
+      const pkg = JSON.parse(fs.readFileSync(packageJsonPath, "utf8")) as {
+        version?: string;
+      };
+      return pkg.version || "unknown";
+    } catch {
+      return "unknown";
+    }
+  }
+
+  private async negotiateProtocol(): Promise<void> {
+    const extensionVersion = this.getExtensionVersion();
+
+    let response: DebugResponse;
+    try {
+      response = await this.sendRequest(
+        {
+          type: "Handshake",
+          client_name: "vscode-extension",
+          client_version: extensionVersion,
+          protocol_min: WIRE_PROTOCOL_MIN_VERSION,
+          protocol_max: WIRE_PROTOCOL_MAX_VERSION,
+          session_label: undefined,
+        },
+        { timeoutMs: 2_500 },
+      );
+    } catch (error) {
+      throw new Error(
+        formatProtocolMismatchMessage({
+          extensionVersion,
+          extra: String(error),
+        }),
+      );
+    }
+
+    if (response.type === "HandshakeAck") {
+      this.negotiatedProtocolVersion = response.selected_version;
+      return;
+    }
+
+    if (response.type === "IncompatibleProtocol") {
+      throw new Error(
+        formatProtocolMismatchMessage({
+          extensionVersion,
+          backendName: response.server_name,
+          backendVersion: response.server_version,
+          backendProtocolMin: response.protocol_min,
+          backendProtocolMax: response.protocol_max,
+          extra: response.message,
+        }),
+      );
+    }
+
+    throw new Error(
+      formatProtocolMismatchMessage({
+        extensionVersion,
+        extra: `Unexpected handshake response: ${response.type}`,
+      }),
+    );
+  }
+
   private rejectPendingRequests(error: Error): void {
     for (const pending of this.pendingRequests.values()) {
+      pending.cleanup();
       pending.reject(error);
     }
     this.pendingRequests.clear();
   }
 
-  private expectResponse<T extends DebugResponse['type']>(
+  private expectResponse<T extends DebugResponse["type"]>(
     response: DebugResponse,
-    type: T
+    type: T,
   ): asserts response is Extract<DebugResponse, { type: T }> {
     if (response.type !== type) {
-      throw new Error(`Unexpected debugger response: expected ${type}, got ${response.type}`);
+      throw new Error(
+        `Unexpected debugger response: expected ${type}, got ${response.type}`,
+      );
     }
   }
+
+  private emitLaunchLifecycle(event: LaunchLifecycleEvent): void {
+    this.launchLifecycleReporter?.(event);
+  }
+}
+
+function debuggerBinaryName(): string {
+  return process.platform === "win32" ? "soroban-debug.exe" : "soroban-debug";
+}
+
+function looksLikeVariableReference(value: string): boolean {
+  return value.includes("${");
+}
+
+export function resolveDebuggerBinaryPath(
+  config: DebuggerProcessConfig,
+): string {
+  const configured = config.binaryPath?.trim();
+  if (configured) {
+    return configured;
+  }
+
+  const envOverride = process.env.SOROBAN_DEBUG_BIN?.trim();
+  if (envOverride) {
+    return envOverride;
+  }
+
+  return debuggerBinaryName();
+}
+
+export async function validateLaunchConfig(
+  config: DebuggerProcessConfig,
+): Promise<LaunchPreflightResult> {
+  const issues: LaunchPreflightIssue[] = [];
+  const resolvedBinaryPath = resolveDebuggerBinaryPath(config);
+
+  if (!looksLikeVariableReference(resolvedBinaryPath)) {
+    pushFileIssue(
+      issues,
+      "binaryPath",
+      resolvedBinaryPath,
+      "a readable soroban-debug binary path or a command available on PATH.",
+      ["pickBinary", "openLaunchConfig", "openSettings"],
+    );
+  }
+
+  if (!config.contractPath || config.contractPath.trim().length === 0) {
+    issues.push({
+      field: "contractPath",
+      message:
+        "Launch config field 'contractPath' must point to a readable contract WASM file.",
+      expected: "A readable .wasm file.",
+      quickFixes: ["pickContract", "openLaunchConfig", "generateLaunchConfig"],
+    });
+  } else if (!looksLikeVariableReference(config.contractPath)) {
+    pushFileIssue(
+      issues,
+      "contractPath",
+      config.contractPath,
+      "a readable contract WASM file.",
+      ["pickContract", "openLaunchConfig", "generateLaunchConfig"],
+    );
+  }
+
+  if (config.snapshotPath && !looksLikeVariableReference(config.snapshotPath)) {
+    pushFileIssue(
+      issues,
+      "snapshotPath",
+      config.snapshotPath,
+      "a readable snapshot JSON file.",
+      ["pickSnapshot", "openLaunchConfig", "generateLaunchConfig"],
+    );
+  }
+
+  if (
+    config.entrypoint !== undefined &&
+    config.entrypoint.trim().length === 0
+  ) {
+    issues.push({
+      field: "entrypoint",
+      message: "Launch config field 'entrypoint' must be a non-empty string.",
+      expected: "A Soroban function name such as 'main' or 'transfer'.",
+      quickFixes: ["openLaunchConfig", "generateLaunchConfig"],
+    });
+  }
+
+  const argsIssue = validateArgs(config.args ?? []);
+  if (argsIssue) {
+    issues.push(argsIssue);
+  }
+
+  if (config.port !== undefined) {
+    if (
+      !Number.isInteger(config.port) ||
+      config.port < 1 ||
+      config.port > 65_535
+    ) {
+      issues.push({
+        field: "port",
+        message: `Launch config field 'port' must be an integer between 1 and 65535; received ${String(config.port)}.`,
+        expected: "An available TCP port between 1 and 65535.",
+        quickFixes: ["openLaunchConfig"],
+      });
+    } else if (config.spawnServer !== false && !(await isPortAvailable(config.port))) {
+      // Only check port availability when we are spawning a local server.
+      // In attach mode (spawnServer: false) the port must already be in use.
+      issues.push({
+        field: "port",
+        message: `Launch config field 'port' is set to ${config.port}, but that port is already in use on 127.0.0.1.`,
+        expected: "An available TCP port between 1 and 65535.",
+        quickFixes: ["openLaunchConfig"],
+      });
+    }
+  }
+
+  if (config.host !== undefined) {
+    if (typeof config.host !== "string" || config.host.trim().length === 0) {
+      issues.push({
+        field: "host",
+        message: "Launch config field 'host' must be a non-empty string.",
+        expected: "A hostname or IP address such as '192.168.1.10' or 'debug.example.com'.",
+        quickFixes: ["openLaunchConfig"],
+      });
+    }
+  }
+
+  if (config.token !== undefined) {
+    if (config.token.trim().length === 0 || /[\r\n]/.test(config.token)) {
+      issues.push({
+        field: "token",
+        message:
+          "Launch config field 'token' must be a single-line non-empty string.",
+        expected: "A non-empty authentication token without line breaks.",
+        quickFixes: ["openLaunchConfig"],
+      });
+    }
+  }
+
+  if (config.batchArgs !== undefined) {
+    if (typeof config.batchArgs !== "string" || config.batchArgs.trim().length === 0) {
+      issues.push({
+        field: "batchArgs",
+        message: "Launch config field 'batchArgs' must be a path to a readable JSON file.",
+        expected: "A readable JSON file containing an array of argument sets.",
+        quickFixes: ["openLaunchConfig"],
+      });
+    } else if (!looksLikeVariableReference(config.batchArgs) && !fs.existsSync(config.batchArgs)) {
+      issues.push({
+        field: "batchArgs",
+        message: `Launch config field 'batchArgs' points to '${config.batchArgs}', which does not exist.`,
+        expected: "A readable JSON file containing an array of argument sets.",
+        quickFixes: ["openLaunchConfig"],
+      });
+    }
+  }
+
+  if (config.showEvents !== undefined && typeof config.showEvents !== "boolean") {
+    issues.push({
+      field: "showEvents",
+      message: "Launch config field 'showEvents' must be a boolean.",
+      expected: "Either true or false.",
+      quickFixes: ["openLaunchConfig"],
+    });
+  }
+
+  if (config.eventFilter !== undefined) {
+    if (!Array.isArray(config.eventFilter)) {
+      issues.push({
+        field: "eventFilter",
+        message: "Launch config field 'eventFilter' must be an array of strings.",
+        expected: "An array like ['topic:transfer', 're:^fn_.*'].",
+        quickFixes: ["openLaunchConfig"],
+      });
+    } else {
+      for (const filter of config.eventFilter) {
+        if (typeof filter !== "string" || filter.trim().length === 0) {
+          issues.push({
+            field: "eventFilter",
+            message: "Launch config field 'eventFilter' contains an empty or non-string pattern.",
+            expected: "Each event filter entry must be a non-empty string.",
+            quickFixes: ["openLaunchConfig"],
+          });
+          break;
+        }
+      }
+    }
+  }
+
+  if (config.mock !== undefined) {
+    if (!Array.isArray(config.mock)) {
+      issues.push({
+        field: "mock",
+        message: "Launch config field 'mock' must be an array of mock specs.",
+        expected: "An array like ['CONTRACT_ID.function=value'].",
+        quickFixes: ["openLaunchConfig"],
+      });
+    } else {
+      for (const spec of config.mock) {
+        const mockIssue = validateMockSpec(spec);
+        if (mockIssue) {
+          issues.push(mockIssue);
+          break;
+        }
+      }
+    }
+  }
+
+  if (config.tlsCert || config.tlsKey) {
+    if (!config.tlsCert) {
+      issues.push({
+        field: "tlsCert",
+        message:
+          "Launch config field 'tlsCert' is required when 'tlsKey' is provided.",
+        expected: "A readable path to a TLS certificate file.",
+        quickFixes: ["openLaunchConfig"],
+      });
+    } else if (!looksLikeVariableReference(config.tlsCert)) {
+      pushFileIssue(
+        issues,
+        "tlsCert",
+        config.tlsCert,
+        "a readable TLS certificate file.",
+        ["openLaunchConfig"],
+      );
+    }
+
+    if (!config.tlsKey) {
+      issues.push({
+        field: "tlsKey",
+        message:
+          "Launch config field 'tlsKey' is required when 'tlsCert' is provided.",
+        expected: "A readable path to a TLS private key file.",
+        quickFixes: ["openLaunchConfig"],
+      });
+    } else if (!looksLikeVariableReference(config.tlsKey)) {
+      pushFileIssue(
+        issues,
+        "tlsKey",
+        config.tlsKey,
+        "a readable TLS private key file.",
+        ["openLaunchConfig"],
+      );
+    }
+  }
+
+  return {
+    ok: issues.length === 0,
+    issues,
+    resolvedBinaryPath,
+  };
+}
+
+function pushFileIssue(
+  issues: LaunchPreflightIssue[],
+  field: "binaryPath" | "contractPath" | "snapshotPath" | "tlsCert" | "tlsKey",
+  filePath: string | undefined,
+  expected: string,
+  quickFixes: LaunchPreflightQuickFix[],
+): void {
+  if (!filePath || filePath.trim().length === 0) {
+    issues.push({
+      field,
+      message: `Launch config field '${field}' must point to ${expected}.`,
+      expected,
+      quickFixes,
+    });
+    return;
+  }
+
+  if (field === "binaryPath" && isCommandOnPath(filePath)) {
+    return;
+  }
+
+  try {
+    const stat = fs.statSync(filePath);
+    if (!stat.isFile()) {
+      issues.push({
+        field,
+        message: `Launch config field '${field}' points to '${filePath}', but that path is not a file.`,
+        expected,
+        quickFixes,
+      });
+      return;
+    }
+
+    fs.accessSync(filePath, fs.constants.R_OK);
+  } catch {
+    issues.push({
+      field,
+      message: `Launch config field '${field}' points to '${filePath}', but the file does not exist or is not readable.`,
+      expected,
+      quickFixes,
+    });
+  }
+}
+
+function validateMockSpec(spec: unknown): LaunchPreflightIssue | null {
+  if (typeof spec !== "string" || spec.trim().length === 0) {
+    return {
+      field: "mock",
+      message: "Launch config field 'mock' contains an empty or non-string entry.",
+      expected: "Mock spec format: CONTRACT_ID.function=return_value",
+      quickFixes: ["openLaunchConfig"],
+    };
+  }
+
+  const raw = spec.trim();
+  const parts = raw.split("=");
+  if (parts.length !== 2) {
+    return {
+      field: "mock",
+      message: `Invalid mock spec '${raw}'. Expected exactly one '=' separator.`,
+      expected: "Mock spec format: CONTRACT_ID.function=return_value",
+      quickFixes: ["openLaunchConfig"],
+    };
+  }
+
+  const signature = parts[0].trim();
+  const returnValue = parts[1].trim();
+  const sigSplit = signature.lastIndexOf(".");
+  if (sigSplit <= 0 || sigSplit >= signature.length - 1 || returnValue.length === 0) {
+    return {
+      field: "mock",
+      message: `Invalid mock spec '${raw}'.`,
+      expected: "Mock spec format: CONTRACT_ID.function=return_value",
+      quickFixes: ["openLaunchConfig"],
+    };
+  }
+
+  return null;
+}
+
+function isCommandOnPath(command: string): boolean {
+  if (
+    path.isAbsolute(command) ||
+    command.includes(path.sep) ||
+    command.includes("/")
+  ) {
+    return false;
+  }
+
+  const pathValue = process.env.PATH;
+  if (!pathValue) {
+    return false;
+  }
+
+  const extensions =
+    process.platform === "win32"
+      ? (process.env.PATHEXT || ".EXE;.CMD;.BAT;.COM")
+          .split(";")
+          .filter((ext) => ext.length > 0)
+      : [""];
+
+  for (const directory of pathValue.split(path.delimiter)) {
+    for (const extension of extensions) {
+      const candidate = path.join(
+        directory,
+        command.endsWith(extension) ? command : `${command}${extension}`,
+      );
+      if (fs.existsSync(candidate)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+function validateArgs(args: unknown): LaunchPreflightIssue | undefined {
+  if (!Array.isArray(args)) {
+    return {
+      field: "args",
+      message: `Launch config field 'args' must be an array; received ${describeValue(args)}.`,
+      expected: 'A JSON array such as [] or ["alice", 10].',
+      quickFixes: ["openLaunchConfig", "generateLaunchConfig"],
+    };
+  }
+
+  const seen = new Set<unknown>();
+  const invalidPath = findNonSerializableValue(args, "$", seen);
+  if (invalidPath) {
+    return {
+      field: "args",
+      message: `Launch config field 'args' contains a non-JSON-serializable value at ${invalidPath}.`,
+      expected:
+        "Only JSON-serializable values: strings, numbers, booleans, null, arrays, and objects.",
+      quickFixes: ["openLaunchConfig", "generateLaunchConfig"],
+    };
+  }
+
+  return undefined;
+}
+
+function findNonSerializableValue(
+  value: unknown,
+  pathLabel: string,
+  seen: Set<unknown>,
+): string | undefined {
+  if (
+    value === null ||
+    typeof value === "string" ||
+    typeof value === "boolean"
+  ) {
+    return undefined;
+  }
+
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? undefined : pathLabel;
+  }
+
+  if (
+    typeof value === "undefined" ||
+    typeof value === "function" ||
+    typeof value === "symbol" ||
+    typeof value === "bigint"
+  ) {
+    return pathLabel;
+  }
+
+  if (Array.isArray(value)) {
+    if (seen.has(value)) {
+      return pathLabel;
+    }
+    seen.add(value);
+    for (let index = 0; index < value.length; index += 1) {
+      const found = findNonSerializableValue(
+        value[index],
+        `${pathLabel}[${index}]`,
+        seen,
+      );
+      if (found) {
+        return found;
+      }
+    }
+    seen.delete(value);
+    return undefined;
+  }
+
+  if (typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    if (seen.has(record)) {
+      return pathLabel;
+    }
+    seen.add(record);
+    for (const [key, item] of Object.entries(record)) {
+      const found = findNonSerializableValue(item, `${pathLabel}.${key}`, seen);
+      if (found) {
+        return found;
+      }
+    }
+    seen.delete(record);
+    return undefined;
+  }
+
+  return pathLabel;
+}
+
+function describeValue(value: unknown): string {
+  if (Array.isArray(value)) {
+    return "an array";
+  }
+  if (value === null) {
+    return "null";
+  }
+  return typeof value;
+}
+
+async function isPortAvailable(port: number): Promise<boolean> {
+  return await new Promise<boolean>((resolve) => {
+    const server = net.createServer();
+    server.once("error", () => {
+      server.close();
+      resolve(false);
+    });
+    server.once("listening", () => {
+      server.close(() => resolve(true));
+    });
+    server.listen(port, "127.0.0.1");
+  });
 }

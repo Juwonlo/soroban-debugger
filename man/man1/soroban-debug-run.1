@@ -2,11 +2,11 @@
 .el .ds Aq '
 .TH run 1  "run " 
 .SH NAME
-run \- Run a contract function with the debugger
+run \- Execute a contract function with the debugger
 .SH SYNOPSIS
-\fBrun\fR <\fB\-c\fR|\fB\-\-contract\fR> <\fB\-f\fR|\fB\-\-function\fR> [\fB\-a\fR|\fB\-\-args\fR] [\fB\-s\fR|\fB\-\-storage\fR] [\fB\-b\fR|\fB\-\-breakpoint\fR] [\fB\-\-network\-snapshot\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-\-server\fR] [\fB\-\-port\fR] [\fB\-\-remote\fR] [\fB\-\-token\fR] [\fB\-\-tls\-cert\fR] [\fB\-\-tls\-key\fR] [\fB\-\-format\fR] [\fB\-\-output\fR] [\fB\-\-show\-events\fR] [\fB\-\-show\-auth\fR] [\fB\-\-json\fR] [\fB\-\-filter\-topic\fR] [\fB\-\-event\-filter\fR] [\fB\-\-repeat\fR] [\fB\-\-mock\fR] [\fB\-\-storage\-filter\fR] [\fB\-\-instruction\-debug\fR] [\fB\-\-step\-instructions\fR] [\fB\-\-step\-mode\fR] [\fB\-\-dry\-run\fR] [\fB\-\-export\-storage\fR] [\fB\-\-import\-storage\fR] [\fB\-\-batch\-args\fR] [\fB\-\-generate\-test\fR] [\fB\-\-overwrite\fR] [\fB\-\-timeout\fR] [\fB\-\-alert\-on\-change\fR] [\fB\-\-expected\-hash\fR] [\fB\-\-show\-ledger\fR] [\fB\-\-ttl\-warning\-threshold\fR] [\fB\-\-trace\-output\fR] [\fB\-\-save\-output\fR] [\fB\-\-append\fR] [\fB\-h\fR|\fB\-\-help\fR] 
+\fBrun\fR [\fB\-c\fR|\fB\-\-contract\fR] [\fB\-f\fR|\fB\-\-function\fR] [\fB\-a\fR|\fB\-\-args\fR] [\fB\-s\fR|\fB\-\-storage\fR] [\fB\-b\fR|\fB\-\-breakpoint\fR] [\fB\-\-log\-point\fR] [\fB\-\-network\-snapshot\fR] [\fB\-v\fR|\fB\-\-verbose\fR] [\fB\-\-server\fR] [\fB\-p\fR|\fB\-\-port\fR] [\fB\-\-host\fR] [\fB\-\-remote\fR] [\fB\-t\fR|\fB\-\-token\fR] [\fB\-\-tls\-cert\fR] [\fB\-\-tls\-key\fR] [\fB\-\-format\fR] [\fB\-\-output\fR] [\fB\-\-show\-events\fR] [\fB\-\-show\-auth\fR] [\fB\-\-json\fR] [\fB\-\-filter\-topic\fR] [\fB\-\-event\-filter\fR] [\fB\-\-repeat\fR] [\fB\-\-mock\fR] [\fB\-\-storage\-filter\fR] [\fB\-\-instruction\-debug\fR] [\fB\-\-step\-instructions\fR] [\fB\-\-step\-mode\fR] [\fB\-\-dry\-run\fR] [\fB\-\-export\-storage\fR] [\fB\-\-export\-compression\fR] [\fB\-\-import\-storage\fR] [\fB\-\-batch\-args\fR] [\fB\-\-generate\-test\fR] [\fB\-\-overwrite\fR] [\fB\-\-timeout\fR] [\fB\-\-alert\-on\-change\fR] [\fB\-\-expected\-hash\fR] [\fB\-\-show\-ledger\fR] [\fB\-\-ttl\-warning\-threshold\fR] [\fB\-\-trace\-output\fR] [\fB\-\-timeline\-output\fR] [\fB\-\-save\-output\fR] [\fB\-\-append\fR] [\fB\-h\fR|\fB\-\-help\fR] 
 .SH DESCRIPTION
-Run a contract function with the debugger
+Execute a contract function with the debugger
 .SH OPTIONS
 .TP
 \fB\-c\fR, \fB\-\-contract\fR \fI<CONTRACT>\fR
@@ -24,6 +24,9 @@ Initial storage state as JSON object
 \fB\-b\fR, \fB\-\-breakpoint\fR \fI<BREAKPOINT>\fR
 Set breakpoint at function name
 .TP
+\fB\-\-log\-point\fR \fI<FUNCTION=MESSAGE>\fR
+Set a log\-only breakpoint at function (logs context without pausing). Format: FUNCTION=MESSAGE
+.TP
 \fB\-\-network\-snapshot\fR \fI<NETWORK_SNAPSHOT>\fR
 Network snapshot file to load before execution
 .TP
@@ -33,13 +36,16 @@ Enable verbose output
 \fB\-\-server\fR
 Start in server mode
 .TP
-\fB\-\-port\fR \fI<PORT>\fR [default: 9229]
+\fB\-p\fR, \fB\-\-port\fR \fI<PORT>\fR [default: 9229]
 Port to listen on or connect to
+.TP
+\fB\-\-host\fR \fI<HOST>\fR [default: 127.0.0.1]
+Host/interface to bind when using \-\-server
 .TP
 \fB\-\-remote\fR \fI<REMOTE>\fR
 Connect to a remote debugger (address:port)
 .TP
-\fB\-\-token\fR \fI<TOKEN>\fR
+\fB\-t\fR, \fB\-\-token\fR \fI<TOKEN>\fR
 Authentication token
 .TP
 \fB\-\-tls\-cert\fR \fI<TLS_CERT>\fR
@@ -56,13 +62,7 @@ Output mode for command result rendering (pretty, json)
 .br
 
 .br
-\fIPossible values:\fR
-.RS 14
-.IP \(bu 2
-pretty
-.IP \(bu 2
-json
-.RE
+[\fIpossible values: \fRpretty, json]
 .TP
 \fB\-\-show\-events\fR
 Show contract events emitted during execution
@@ -103,6 +103,13 @@ Execute contract in dry\-run mode: simulate execution without persisting storage
 \fB\-\-export\-storage\fR \fI<EXPORT_STORAGE>\fR
 Export storage state to JSON file after execution
 .TP
+\fB\-\-export\-compression\fR \fI<EXPORT_COMPRESSION>\fR [default: none]
+Compression format for exported storage snapshots
+.br
+
+.br
+[\fIpossible values: \fRnone, gzip, zstd]
+.TP
 \fB\-\-import\-storage\fR \fI<IMPORT_STORAGE>\fR
 Import storage state from JSON file before execution
 .TP
@@ -131,7 +138,10 @@ Show ledger entries accessed during execution
 TTL warning threshold in ledger sequence numbers (default: 1000)
 .TP
 \fB\-\-trace\-output\fR \fI<TRACE_OUTPUT>\fR
-Export execution trace to JSON file
+Export execution trace to JSON file and emit a replay manifest sidecar
+.TP
+\fB\-\-timeline\-output\fR \fI<FILE>\fR
+Export a compact timeline narrative (pause points + key deltas) to JSON file
 .TP
 \fB\-\-save\-output\fR \fI<FILE>\fR
 Path to file where execution results should be saved

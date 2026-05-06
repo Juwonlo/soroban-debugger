@@ -1,21 +1,14 @@
 //! Tests that demonstrate usage of test fixture contracts
 
+#[path = "fixtures/mod.rs"]
+mod fixtures;
+
 use soroban_debugger::utils::wasm;
 use std::fs;
 
-/// Helper to get fixture path - mirrors the mod.rs helper but for integration tests
-fn get_fixture_path(name: &str) -> std::path::PathBuf {
-    let manifest_dir = env!("CARGO_MANIFEST_DIR");
-    std::path::PathBuf::from(manifest_dir)
-        .join("tests")
-        .join("fixtures")
-        .join("wasm")
-        .join(format!("{}.wasm", name))
-}
-
 #[test]
 fn test_fixture_counter_parsing() {
-    let fixture_path = get_fixture_path("counter");
+    let fixture_path = fixtures::get_fixture_path(fixtures::names::COUNTER);
 
     // Skip test if fixture doesn't exist (needs to be built first)
     if !fixture_path.exists() {
@@ -31,12 +24,9 @@ fn test_fixture_counter_parsing() {
     // Test that we can parse functions from the counter contract
     let functions = wasm::parse_functions(&wasm_bytes).expect("Failed to parse functions");
 
-    // Counter contract should have increment, decrement, get, and init functions
+    // Counter contract should have the release exports recorded in the fixture manifest.
     assert!(
-        functions.contains(&"increment".to_string())
-            || functions.contains(&"decrement".to_string())
-            || functions.contains(&"get".to_string())
-            || functions.contains(&"init".to_string()),
+        functions.contains(&"increment".to_string()) && functions.contains(&"get".to_string()),
         "Counter fixture should contain expected functions. Found: {:?}",
         functions
     );
@@ -51,7 +41,7 @@ fn test_fixture_counter_parsing() {
 
 #[test]
 fn test_fixture_echo_parsing() {
-    let fixture_path = get_fixture_path("echo");
+    let fixture_path = fixtures::get_fixture_path(fixtures::names::ECHO);
 
     if !fixture_path.exists() {
         eprintln!(
@@ -77,10 +67,14 @@ fn test_fixture_echo_parsing() {
 #[test]
 fn test_fixture_metadata_extraction() {
     // Test metadata extraction on fixtures (if they have metadata)
-    let fixtures = ["counter", "echo", "budget_heavy"];
+    let fixture_names = [
+        fixtures::names::COUNTER,
+        fixtures::names::ECHO,
+        fixtures::names::BUDGET_HEAVY,
+    ];
 
-    for fixture_name in fixtures {
-        let fixture_path = get_fixture_path(fixture_name);
+    for fixture_name in fixture_names {
+        let fixture_path = fixtures::get_fixture_path(fixture_name);
 
         if !fixture_path.exists() {
             continue; // Skip if not built
@@ -106,7 +100,7 @@ fn test_fixture_metadata_extraction() {
 fn test_fixture_inspect_command() {
     use assert_cmd::Command;
 
-    let fixture_path = get_fixture_path("counter");
+    let fixture_path = fixtures::get_fixture_path(fixtures::names::COUNTER);
 
     if !fixture_path.exists() {
         eprintln!(
@@ -133,7 +127,7 @@ fn test_fixture_inspect_command() {
 fn test_fixture_registration_and_invocation() {
     use soroban_sdk::{Env, Symbol};
 
-    let fixture_path = get_fixture_path("counter");
+    let fixture_path = fixtures::get_fixture_path(fixtures::names::COUNTER);
     if !fixture_path.exists() {
         return;
     }

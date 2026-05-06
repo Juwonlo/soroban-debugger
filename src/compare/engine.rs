@@ -55,6 +55,8 @@ pub struct ReturnValueDiff {
 pub struct FlowDiff {
     pub a_calls: Vec<CallEntry>,
     pub b_calls: Vec<CallEntry>,
+    pub filtered_a_calls: Vec<String>,
+    pub filtered_b_calls: Vec<String>,
     /// Unified diff lines (text representation)
     pub diff_lines: Vec<DiffLine>,
     pub identical: bool,
@@ -65,6 +67,8 @@ pub struct FlowDiff {
 pub struct EventDiff {
     pub a_events: Vec<EventEntry>,
     pub b_events: Vec<EventEntry>,
+    pub filtered_a_events: Vec<serde_json::Value>,
+    pub filtered_b_events: Vec<serde_json::Value>,
     pub identical: bool,
 }
 
@@ -79,6 +83,64 @@ pub enum DiffLine {
     OnlyB(String),
 }
 
+/// Comparison-time filters used to suppress noisy fields or subtrees.
+#[derive(Debug, Clone, Default)]
+pub struct CompareFilters {
+    ignore_paths: Vec<Vec<String>>,
+    ignore_fields: BTreeSet<String>,
+}
+
+impl CompareFilters {
+    pub fn new(ignore_paths: Vec<String>, ignore_fields: Vec<String>) -> crate::Result<Self> {
+        let mut parsed_paths = Vec::with_capacity(ignore_paths.len());
+        for path in ignore_paths {
+            parsed_paths.push(Self::parse_path(&path)?);
+        }
+
+        Ok(Self {
+            ignore_paths: parsed_paths,
+            ignore_fields: ignore_fields.into_iter().collect(),
+        })
+    }
+
+    fn parse_path(path: &str) -> crate::Result<Vec<String>> {
+        let trimmed = path.trim();
+        if trimmed.is_empty() {
+            return Err(crate::DebuggerError::InvalidArguments(
+                "ignore-path cannot be empty".to_string(),
+            )
+            .into());
+        }
+
+        let segments: Vec<String> = trimmed
+            .trim_start_matches('/')
+            .split('/')
+            .filter(|segment| !segment.is_empty())
+            .map(|segment| segment.to_string())
+            .collect();
+
+        if segments.is_empty() {
+            return Err(crate::DebuggerError::InvalidArguments(format!(
+                "invalid ignore-path '{}': expected a slash-delimited path like /storage/key",
+                path
+            ))
+            .into());
+        }
+
+        Ok(segments)
+    }
+
+    fn ignores_path(&self, path: &[String]) -> bool {
+        self.ignore_paths
+            .iter()
+            .any(|ignored| path.starts_with(ignored))
+    }
+
+    fn ignores_field(&self, field: &str) -> bool {
+        self.ignore_fields.contains(field)
+    }
+}
+
 // ─── Engine ──────────────────────────────────────────────────────────
 
 /// The comparison engine.
@@ -87,6 +149,15 @@ pub struct CompareEngine;
 impl CompareEngine {
     /// Compare two execution traces and produce a report.
     pub fn compare(trace_a: &ExecutionTrace, trace_b: &ExecutionTrace) -> ComparisonReport {
+        Self::compare_with_filters(trace_a, trace_b, &CompareFilters::default())
+    }
+
+    /// Compare two execution traces while suppressing configured paths and fields.
+    pub fn compare_with_filters(
+        trace_a: &ExecutionTrace,
+        trace_b: &ExecutionTrace,
+        filters: &CompareFilters,
+    ) -> ComparisonReport {
         let label_a = trace_a
             .label
             .clone()
@@ -99,14 +170,15 @@ impl CompareEngine {
         ComparisonReport {
             label_a,
             label_b,
-            storage_diff: Self::diff_storage(&trace_a.storage, &trace_b.storage),
-            budget_diff: Self::diff_budget(&trace_a.budget, &trace_b.budget),
+            storage_diff: Self::diff_storage(&trace_a.storage, &trace_b.storage, filters),
+            budget_diff: Self::diff_budget(&trace_a.budget, &trace_b.budget, filters),
             return_value_diff: Self::diff_return_value(
                 &trace_a.return_value,
                 &trace_b.return_value,
+                filters,
             ),
-            flow_diff: Self::diff_flow(&trace_a.call_sequence, &trace_b.call_sequence),
-            event_diff: Self::diff_events(&trace_a.events, &trace_b.events),
+            flow_diff: Self::diff_flow(&trace_a.call_sequence, &trace_b.call_sequence, filters),
+            event_diff: Self::diff_events(&trace_a.events, &trace_b.events, filters),
         }
     }
 
@@ -115,9 +187,12 @@ impl CompareEngine {
     fn diff_storage(
         a: &BTreeMap<String, serde_json::Value>,
         b: &BTreeMap<String, serde_json::Value>,
+        filters: &CompareFilters,
     ) -> StorageDiff {
-        let keys_a: BTreeSet<_> = a.keys().cloned().collect();
-        let keys_b: BTreeSet<_> = b.keys().cloned().collect();
+        let normalized_a = Self::normalize_storage_map(a, filters);
+        let normalized_b = Self::normalize_storage_map(b, filters);
+        let keys_a: BTreeSet<_> = normalized_a.keys().cloned().collect();
+        let keys_b: BTreeSet<_> = normalized_b.keys().cloned().collect();
 
         let mut only_in_a = BTreeMap::new();
         let mut only_in_b = BTreeMap::new();
@@ -126,19 +201,22 @@ impl CompareEngine {
 
         for key in &keys_a {
             if !keys_b.contains(key) {
-                only_in_a.insert(key.clone(), a[key].clone());
+                only_in_a.insert(key.clone(), normalized_a[key].clone());
             }
         }
 
         for key in &keys_b {
             if !keys_a.contains(key) {
-                only_in_b.insert(key.clone(), b[key].clone());
+                only_in_b.insert(key.clone(), normalized_b[key].clone());
             }
         }
 
         for key in keys_a.intersection(&keys_b) {
-            if a[key] != b[key] {
-                modified.insert(key.clone(), (a[key].clone(), b[key].clone()));
+            if normalized_a[key] != normalized_b[key] {
+                modified.insert(
+                    key.clone(),
+                    (normalized_a[key].clone(), normalized_b[key].clone()),
+                );
             } else {
                 unchanged_count += 1;
             }
@@ -154,19 +232,25 @@ impl CompareEngine {
 
     // ── Budget ───────────────────────────────────────────────────────
 
-    fn diff_budget(a: &Option<BudgetTrace>, b: &Option<BudgetTrace>) -> BudgetDiff {
-        let cpu_delta = match (a, b) {
+    fn diff_budget(
+        a: &Option<BudgetTrace>,
+        b: &Option<BudgetTrace>,
+        filters: &CompareFilters,
+    ) -> BudgetDiff {
+        let normalized_a = Self::normalize_budget(a, filters);
+        let normalized_b = Self::normalize_budget(b, filters);
+        let cpu_delta = match (&normalized_a, &normalized_b) {
             (Some(a), Some(b)) => Some(b.cpu_instructions as i128 - a.cpu_instructions as i128),
             _ => None,
         };
-        let memory_delta = match (a, b) {
+        let memory_delta = match (&normalized_a, &normalized_b) {
             (Some(a), Some(b)) => Some(b.memory_bytes as i128 - a.memory_bytes as i128),
             _ => None,
         };
 
         BudgetDiff {
-            a: a.clone(),
-            b: b.clone(),
+            a: normalized_a,
+            b: normalized_b,
             cpu_delta,
             memory_delta,
         }
@@ -177,31 +261,48 @@ impl CompareEngine {
     fn diff_return_value(
         a: &Option<serde_json::Value>,
         b: &Option<serde_json::Value>,
+        filters: &CompareFilters,
     ) -> ReturnValueDiff {
-        let equal = a == b;
+        let normalized_a = a
+            .as_ref()
+            .and_then(|value| Self::normalize_value(value, &["return_value"], filters));
+        let normalized_b = b
+            .as_ref()
+            .and_then(|value| Self::normalize_value(value, &["return_value"], filters));
+        let equal = normalized_a == normalized_b;
         ReturnValueDiff {
-            a: a.clone(),
-            b: b.clone(),
+            a: normalized_a,
+            b: normalized_b,
             equal,
         }
     }
 
     // ── Execution flow (LCS-based unified diff) ──────────────────────
 
-    fn diff_flow(a: &[CallEntry], b: &[CallEntry]) -> FlowDiff {
-        let identical = a == b;
-        let diff_lines = Self::compute_lcs_diff(a, b);
+    fn diff_flow(a: &[CallEntry], b: &[CallEntry], filters: &CompareFilters) -> FlowDiff {
+        let filtered_a_calls: Vec<String> = a
+            .iter()
+            .filter_map(|entry| Self::normalize_call_entry(entry, filters))
+            .collect();
+        let filtered_b_calls: Vec<String> = b
+            .iter()
+            .filter_map(|entry| Self::normalize_call_entry(entry, filters))
+            .collect();
+        let identical = filtered_a_calls == filtered_b_calls;
+        let diff_lines = Self::compute_lcs_diff(&filtered_a_calls, &filtered_b_calls);
 
         FlowDiff {
             a_calls: a.to_vec(),
             b_calls: b.to_vec(),
+            filtered_a_calls,
+            filtered_b_calls,
             diff_lines,
             identical,
         }
     }
 
     /// Compute a unified-style diff of two call sequences using LCS.
-    fn compute_lcs_diff(a: &[CallEntry], b: &[CallEntry]) -> Vec<DiffLine> {
+    fn compute_lcs_diff(a: &[String], b: &[String]) -> Vec<DiffLine> {
         let n = a.len();
         let m = b.len();
 
@@ -223,14 +324,14 @@ impl CompareEngine {
 
         while i > 0 || j > 0 {
             if i > 0 && j > 0 && a[i - 1] == b[j - 1] {
-                lines.push(DiffLine::Same(Self::format_call(&a[i - 1])));
+                lines.push(DiffLine::Same(a[i - 1].clone()));
                 i -= 1;
                 j -= 1;
             } else if j > 0 && (i == 0 || table[i][j - 1] >= table[i - 1][j]) {
-                lines.push(DiffLine::OnlyB(Self::format_call(&b[j - 1])));
+                lines.push(DiffLine::OnlyB(b[j - 1].clone()));
                 j -= 1;
             } else {
-                lines.push(DiffLine::OnlyA(Self::format_call(&a[i - 1])));
+                lines.push(DiffLine::OnlyA(a[i - 1].clone()));
                 i -= 1;
             }
         }
@@ -239,23 +340,136 @@ impl CompareEngine {
         lines
     }
 
-    fn format_call(entry: &CallEntry) -> String {
-        let indent = "  ".repeat(entry.depth as usize);
-        if let Some(ref args) = entry.args {
-            format!("{}{}({})", indent, entry.function, args)
-        } else {
-            format!("{}{}()", indent, entry.function)
-        }
-    }
-
     // ── Events ───────────────────────────────────────────────────────
 
-    fn diff_events(a: &[EventEntry], b: &[EventEntry]) -> EventDiff {
-        let identical = a == b;
+    fn diff_events(a: &[EventEntry], b: &[EventEntry], filters: &CompareFilters) -> EventDiff {
+        let filtered_a_events: Vec<serde_json::Value> = a
+            .iter()
+            .filter_map(|entry| Self::normalize_event_entry(entry, filters))
+            .collect();
+        let filtered_b_events: Vec<serde_json::Value> = b
+            .iter()
+            .filter_map(|entry| Self::normalize_event_entry(entry, filters))
+            .collect();
+        let identical = filtered_a_events == filtered_b_events;
         EventDiff {
             a_events: a.to_vec(),
             b_events: b.to_vec(),
+            filtered_a_events,
+            filtered_b_events,
             identical,
+        }
+    }
+
+    fn normalize_storage_map(
+        storage: &BTreeMap<String, serde_json::Value>,
+        filters: &CompareFilters,
+    ) -> BTreeMap<String, serde_json::Value> {
+        storage
+            .iter()
+            .filter_map(|(key, value)| {
+                Self::normalize_value(value, &["storage", key.as_str()], filters)
+                    .map(|normalized| (key.clone(), normalized))
+            })
+            .collect()
+    }
+
+    fn normalize_budget(
+        budget: &Option<BudgetTrace>,
+        filters: &CompareFilters,
+    ) -> Option<BudgetTrace> {
+        let value = serde_json::to_value(budget.as_ref()?).ok()?;
+        let normalized = Self::normalize_value(&value, &["budget"], filters)?;
+        serde_json::from_value(normalized).ok()
+    }
+
+    fn normalize_call_entry(entry: &CallEntry, filters: &CompareFilters) -> Option<String> {
+        let value = serde_json::to_value(entry).ok()?;
+        let normalized = Self::normalize_value(&value, &["call_sequence"], filters)?;
+        Some(Self::format_call_value(&normalized))
+    }
+
+    fn normalize_event_entry(
+        entry: &EventEntry,
+        filters: &CompareFilters,
+    ) -> Option<serde_json::Value> {
+        let value = serde_json::to_value(entry).ok()?;
+        Self::normalize_value(&value, &["events"], filters)
+    }
+
+    fn normalize_value(
+        value: &serde_json::Value,
+        path: &[&str],
+        filters: &CompareFilters,
+    ) -> Option<serde_json::Value> {
+        let path_segments = path
+            .iter()
+            .map(|segment| (*segment).to_string())
+            .collect::<Vec<_>>();
+        Self::normalize_value_with_path(value, path_segments, filters)
+    }
+
+    fn normalize_value_with_path(
+        value: &serde_json::Value,
+        path: Vec<String>,
+        filters: &CompareFilters,
+    ) -> Option<serde_json::Value> {
+        if filters.ignores_path(&path) {
+            return None;
+        }
+
+        match value {
+            serde_json::Value::Object(map) => {
+                let mut normalized = serde_json::Map::new();
+                for (key, child) in map {
+                    if filters.ignores_field(key) {
+                        continue;
+                    }
+
+                    let mut child_path = path.clone();
+                    child_path.push(key.clone());
+                    if let Some(child) = Self::normalize_value_with_path(child, child_path, filters)
+                    {
+                        normalized.insert(key.clone(), child);
+                    }
+                }
+                Some(serde_json::Value::Object(normalized))
+            }
+            serde_json::Value::Array(items) => {
+                let mut normalized = Vec::with_capacity(items.len());
+                for (index, child) in items.iter().enumerate() {
+                    let mut child_path = path.clone();
+                    child_path.push(index.to_string());
+                    if let Some(child) = Self::normalize_value_with_path(child, child_path, filters)
+                    {
+                        normalized.push(child);
+                    }
+                }
+                Some(serde_json::Value::Array(normalized))
+            }
+            _ => Some(value.clone()),
+        }
+    }
+
+    fn format_call_value(value: &serde_json::Value) -> String {
+        let Some(object) = value.as_object() else {
+            return value.to_string();
+        };
+
+        let function = object
+            .get("function")
+            .and_then(|value| value.as_str())
+            .unwrap_or("<unknown>");
+        let depth = object
+            .get("depth")
+            .and_then(|value| value.as_u64())
+            .unwrap_or(0) as usize;
+        let indent = "  ".repeat(depth);
+
+        if let Some(args) = object.get("args").and_then(|value| value.as_str()) {
+            format!("{}{}({})", indent, function, args)
+        } else {
+            format!("{}{}()", indent, function)
         }
     }
 
@@ -392,8 +606,8 @@ impl CompareEngine {
 
         if fd.identical {
             out.push_str("  (identical call sequences)\n");
-            for entry in &fd.a_calls {
-                out.push_str(&format!("    {}\n", Self::format_call_display(entry)));
+            for entry in &fd.filtered_a_calls {
+                out.push_str(&format!("    {}\n", entry));
             }
         } else {
             out.push_str("  Unified diff (- = only in A, + = only in B):\n\n");
@@ -412,34 +626,29 @@ impl CompareEngine {
         let ed = &report.event_diff;
 
         if ed.identical {
-            if ed.a_events.is_empty() {
+            if ed.filtered_a_events.is_empty() {
                 out.push_str("  (no events in either trace)\n");
             } else {
-                out.push_str(&format!("  (identical — {} event(s))\n", ed.a_events.len()));
+                out.push_str(&format!(
+                    "  (identical — {} event(s))\n",
+                    ed.filtered_a_events.len()
+                ));
             }
         } else {
             out.push_str(&format!(
                 "  A: {} event(s), B: {} event(s)\n\n",
-                ed.a_events.len(),
-                ed.b_events.len()
+                ed.filtered_a_events.len(),
+                ed.filtered_b_events.len()
             ));
 
             out.push_str("  Events in A:\n");
-            for (i, ev) in ed.a_events.iter().enumerate() {
-                out.push_str(&format!("    [{}] topics={:?}", i, ev.topics));
-                if let Some(ref d) = ev.data {
-                    out.push_str(&format!(" data={}", d));
-                }
-                out.push('\n');
+            for (i, ev) in ed.filtered_a_events.iter().enumerate() {
+                out.push_str(&format!("    [{}] {}\n", i, ev));
             }
 
             out.push_str("\n  Events in B:\n");
-            for (i, ev) in ed.b_events.iter().enumerate() {
-                out.push_str(&format!("    [{}] topics={:?}", i, ev.topics));
-                if let Some(ref d) = ev.data {
-                    out.push_str(&format!(" data={}", d));
-                }
-                out.push('\n');
+            for (i, ev) in ed.filtered_b_events.iter().enumerate() {
+                out.push_str(&format!("    [{}] {}\n", i, ev));
             }
         }
 
@@ -447,21 +656,20 @@ impl CompareEngine {
 
         out
     }
-
-    fn format_call_display(entry: &CallEntry) -> String {
-        let indent = "  ".repeat(entry.depth as usize);
-        if let Some(ref args) = entry.args {
-            format!("{}{}({})", indent, entry.function, args)
-        } else {
-            format!("{}{}()", indent, entry.function)
-        }
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::compare::trace::*;
+
+    fn filters(paths: &[&str], fields: &[&str]) -> CompareFilters {
+        CompareFilters::new(
+            paths.iter().map(|path| (*path).to_string()).collect(),
+            fields.iter().map(|field| (*field).to_string()).collect(),
+        )
+        .expect("filters should parse")
+    }
 
     fn make_trace_a() -> ExecutionTrace {
         ExecutionTrace {
@@ -694,5 +902,56 @@ mod tests {
 
         assert!(report.budget_diff.cpu_delta.is_none());
         assert!(report.budget_diff.memory_delta.is_none());
+    }
+
+    #[test]
+    fn test_ignore_path_suppresses_storage_key_diff() {
+        let a = make_trace_a();
+        let b = make_trace_b();
+
+        let report =
+            CompareEngine::compare_with_filters(&a, &b, &filters(&["/storage/fee_pool"], &[]));
+
+        assert!(!report.storage_diff.only_in_b.contains_key("fee_pool"));
+    }
+
+    #[test]
+    fn test_ignore_field_suppresses_nested_return_value_diff() {
+        let mut a = make_trace_a();
+        let mut b = make_trace_a();
+        a.return_value = Some(serde_json::json!({
+            "status": "ok",
+            "meta": { "timestamp": 100, "seq": 1 }
+        }));
+        b.return_value = Some(serde_json::json!({
+            "status": "ok",
+            "meta": { "timestamp": 200, "seq": 2 }
+        }));
+
+        let report =
+            CompareEngine::compare_with_filters(&a, &b, &filters(&[], &["timestamp", "seq"]));
+
+        assert!(report.return_value_diff.equal);
+    }
+
+    #[test]
+    fn test_ignore_field_suppresses_flow_diff_noise() {
+        let mut a = make_trace_a();
+        let mut b = make_trace_a();
+        a.call_sequence = vec![CallEntry {
+            function: "transfer".to_string(),
+            args: Some("Alice".to_string()),
+            depth: 0,
+        }];
+        b.call_sequence = vec![CallEntry {
+            function: "transfer".to_string(),
+            args: Some("Bob".to_string()),
+            depth: 0,
+        }];
+
+        let report = CompareEngine::compare_with_filters(&a, &b, &filters(&[], &["args"]));
+
+        assert!(report.flow_diff.identical);
+        assert_eq!(report.flow_diff.filtered_a_calls, vec!["transfer()"]);
     }
 }
