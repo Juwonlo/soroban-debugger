@@ -1,9 +1,9 @@
 use crate::debugger::breakpoint::{BreakpointManager, BreakpointSpec};
-use crate::history::ReconnectionLog;
 use crate::debugger::engine::{DebuggerEngine, StepOverResult};
+use crate::history::HistoryManager;
+use crate::history::ReconnectionLog;
 use crate::inspector::budget::BudgetInspector;
 use crate::inspector::events::{ContractEvent, EventInspector};
-use crate::history::HistoryManager;
 use crate::server::protocol::{
     negotiate_protocol_version, PROTOCOL_MAX_VERSION, PROTOCOL_MIN_VERSION,
 };
@@ -336,7 +336,11 @@ impl DebugServer {
                 session_label,
             } = &request
             {
-                if let Some(label) = session_label.as_ref().map(|s| s.trim()).filter(|s| !s.is_empty()) {
+                if let Some(label) = session_label
+                    .as_ref()
+                    .map(|s| s.trim())
+                    .filter(|s| !s.is_empty())
+                {
                     session_ctx.info.label = Some(label.to_string());
                     self.session_label = session_ctx.info.label.clone();
                 }
@@ -390,14 +394,16 @@ impl DebugServer {
                         );
                         send_msg(response)?;
                         if let Ok(history) = HistoryManager::new() {
-                            let _ = history.append_remote_session(crate::history::RemoteSessionRecord {
-                                session_id: session_ctx.info.session_id.clone(),
-                                created_at: session_ctx.info.created_at.clone(),
-                                label: session_ctx.info.label.clone(),
-                                remote_addr: peer_addr.to_string(),
-                                client_name: client_name.clone(),
-                                client_version: client_version.clone(),
-                            });
+                            let _ = history.append_remote_session(
+                                crate::history::RemoteSessionRecord {
+                                    session_id: session_ctx.info.session_id.clone(),
+                                    created_at: session_ctx.info.created_at.clone(),
+                                    label: session_ctx.info.label.clone(),
+                                    remote_addr: peer_addr.to_string(),
+                                    client_name: client_name.clone(),
+                                    client_version: client_version.clone(),
+                                },
+                            );
                         }
                         continue;
                     }
@@ -492,7 +498,10 @@ impl DebugServer {
             }
 
             // ── Handle Reconnect before normal request dispatch ──────────
-            if let DebugRequest::Reconnect { session_id: ref client_session_id } = request {
+            if let DebugRequest::Reconnect {
+                session_id: ref client_session_id,
+            } = request
+            {
                 if *client_session_id != self.session_id {
                     let response = DebugMessage::response(
                         message.id,
@@ -577,8 +586,13 @@ impl DebugServer {
                             Ok(executor) => {
                                 let mut engine = DebuggerEngine::new(executor, Vec::new());
                                 if !self.mock_specs.is_empty() {
-                                    if let Err(e) = engine.executor_mut().set_mock_specs(&self.mock_specs) {
-                                        let msg = format!("Invalid mock spec in server configuration: {}", e);
+                                    if let Err(e) =
+                                        engine.executor_mut().set_mock_specs(&self.mock_specs)
+                                    {
+                                        let msg = format!(
+                                            "Invalid mock spec in server configuration: {}",
+                                            e
+                                        );
                                         DebugResponse::Error { message: msg }
                                     } else {
                                         let _ = engine.enable_instruction_debug(&bytes);
@@ -933,9 +947,7 @@ impl DebugServer {
                                 current_function,
                                 step_count,
                                 source_location: engine.current_source_location().map(Into::into),
-                                pause_reason: engine
-                                    .pause_reason_label()
-                                    .map(|s| s.to_string()),
+                                pause_reason: engine.pause_reason_label().map(|s| s.to_string()),
                             }
                         }
                         Err(e) => DebugResponse::Error {
@@ -964,9 +976,7 @@ impl DebugServer {
                                 current_function,
                                 step_count,
                                 source_location: engine.current_source_location().map(Into::into),
-                                pause_reason: engine
-                                    .pause_reason_label()
-                                    .map(|s| s.to_string()),
+                                pause_reason: engine.pause_reason_label().map(|s| s.to_string()),
                             }
                         }
                         Err(e) => DebugResponse::Error {
@@ -1171,9 +1181,7 @@ impl DebugServer {
                                 paused: engine.is_paused(),
                                 call_stack,
                                 source_location: engine.current_source_location().map(Into::into),
-                                pause_reason: engine
-                                    .pause_reason_label()
-                                    .map(|s| s.to_string()),
+                                pause_reason: engine.pause_reason_label().map(|s| s.to_string()),
                             }
                         }
                         Err(e) => DebugResponse::Error {
@@ -1685,7 +1693,7 @@ mod tests {
             Vec::new(),
             Vec::new(),
         )
-            .expect("Failed to create server");
+        .expect("Failed to create server");
         let shutdown = server.shutdown.clone();
 
         let local = tokio::task::LocalSet::new();
@@ -1719,7 +1727,7 @@ mod tests {
             Vec::new(),
             Vec::new(),
         )
-            .expect("Failed to create server");
+        .expect("Failed to create server");
         assert_eq!(server.host, "127.0.0.1");
         assert!(server.engine.is_none());
         assert!(server.token.is_none());

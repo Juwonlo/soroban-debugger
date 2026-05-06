@@ -2970,7 +2970,10 @@ pub fn doctor(args: crate::cli::args::DoctorArgs) -> Result<()> {
                     connect: check_ok(format!("Connected to {}", addr)),
                     handshake: Some(check_ok("Handshake succeeded")),
                     ping,
-                    auth: args.token.as_ref().map(|_| check_ok("Authentication succeeded")),
+                    auth: args
+                        .token
+                        .as_ref()
+                        .map(|_| check_ok("Authentication succeeded")),
                     selected_protocol: None,
                 })
             }

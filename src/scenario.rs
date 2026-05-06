@@ -156,32 +156,46 @@ pub fn run_scenario(args: ScenarioArgs, _verbosity: Verbosity) -> Result<()> {
     let mut all_passed = true;
     let mut variables: HashMap<String, String> = HashMap::new();
 
-    let include_tags: Option<Vec<String>> = args.tags.as_ref().map(|s| s.split(',').map(|t| t.trim().to_string()).collect());
-    let exclude_tags: Option<Vec<String>> = args.exclude_tags.as_ref().map(|s| s.split(',').map(|t| t.trim().to_string()).collect());
+    let include_tags: Option<Vec<String>> = args
+        .tags
+        .as_ref()
+        .map(|s| s.split(',').map(|t| t.trim().to_string()).collect());
+    let exclude_tags: Option<Vec<String>> = args
+        .exclude_tags
+        .as_ref()
+        .map(|s| s.split(',').map(|t| t.trim().to_string()).collect());
 
     for (i, step) in steps.iter().enumerate() {
         let step_label = step.name.as_deref().unwrap_or(&step.function);
-        
+
         // Tag filtering logic
         let step_tags = step.tags.as_deref().unwrap_or(&[]);
-        
+
         // Skip if there are exclude tags and the step has any of them
         if let Some(excludes) = &exclude_tags {
             if step_tags.iter().any(|t| excludes.contains(t)) {
                 println!(
                     "{}",
-                    Formatter::info(format!("Skipping Step {} ({}): excluded by tag", i + 1, step_label))
+                    Formatter::info(format!(
+                        "Skipping Step {} ({}): excluded by tag",
+                        i + 1,
+                        step_label
+                    ))
                 );
                 continue;
             }
         }
-        
+
         // Skip if there are include tags and the step has none of them
         if let Some(includes) = &include_tags {
             if !step_tags.iter().any(|t| includes.contains(t)) {
                 println!(
                     "{}",
-                    Formatter::info(format!("Skipping Step {} ({}): does not match included tags", i + 1, step_label))
+                    Formatter::info(format!(
+                        "Skipping Step {} ({}): does not match included tags",
+                        i + 1,
+                        step_label
+                    ))
                 );
                 continue;
             }
@@ -202,7 +216,10 @@ pub fn run_scenario(args: ScenarioArgs, _verbosity: Verbosity) -> Result<()> {
             println!("  {}", Formatter::info(format!("Notes: {}", notes)));
         }
         if let Some(tags) = &step.tags {
-            println!("  {}", Formatter::info(format!("Tags: [{}]", tags.join(", "))));
+            println!(
+                "  {}",
+                Formatter::info(format!("Tags: [{}]", tags.join(", ")))
+            );
         }
 
         let resolved_args = if let Some(args_json) = &step.args {
@@ -628,14 +645,20 @@ mod tests {
         assert_eq!(scenario.steps[0].capture.as_deref(), Some("my_result"));
         assert!(scenario.steps[0].tags.is_none());
         assert!(scenario.steps[0].notes.is_none());
-        
+
         assert!(scenario.steps[1].capture.is_none());
         assert_eq!(
             scenario.steps[1].expected_return.as_deref(),
             Some("{{my_result}}")
         );
-        assert_eq!(scenario.steps[1].tags.as_deref(), Some(vec!["smoke".to_string(), "fast".to_string()].as_slice()));
-        assert_eq!(scenario.steps[1].notes.as_deref(), Some("This step is important"));
+        assert_eq!(
+            scenario.steps[1].tags.as_deref(),
+            Some(vec!["smoke".to_string(), "fast".to_string()].as_slice())
+        );
+        assert_eq!(
+            scenario.steps[1].notes.as_deref(),
+            Some("This step is important")
+        );
     }
 
     #[test]

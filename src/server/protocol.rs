@@ -267,9 +267,7 @@ pub enum DebugRequest {
 
     /// Reconnect to an existing session after a transient disconnect.
     /// The client provides the session_id it received from a previous HandshakeAck.
-    Reconnect {
-        session_id: String,
-    },
+    Reconnect { session_id: String },
 
     /// Catch-all for forward compatibility
     #[serde(other)]

@@ -371,15 +371,16 @@ impl RemoteClient {
             } => {
                 self.selected_protocol_version = Some(selected_version);
                 self.session_id = session_id.clone();
-                self.session_info = session_id.as_ref().map(|sid| {
-                    crate::server::protocol::RemoteSessionInfo {
-                        session_id: sid.clone(),
-                        created_at: session_created_at
-                            .clone()
-                            .unwrap_or_else(|| "unknown".to_string()),
-                        label: session_label.clone(),
-                    }
-                });
+                self.session_info =
+                    session_id
+                        .as_ref()
+                        .map(|sid| crate::server::protocol::RemoteSessionInfo {
+                            session_id: sid.clone(),
+                            created_at: session_created_at
+                                .clone()
+                                .unwrap_or_else(|| "unknown".to_string()),
+                            label: session_label.clone(),
+                        });
                 Ok(selected_version)
             }
             DebugResponse::IncompatibleProtocol { message, .. } => {
@@ -883,19 +884,13 @@ impl RemoteClient {
             }
             DebugResponse::SessionExpired { message } => {
                 self.session_id = None;
-                Err(DebuggerError::ExecutionError(format!(
-                    "Session expired: {}",
-                    message
-                ))
-                .into())
+                Err(DebuggerError::ExecutionError(format!("Session expired: {}", message)).into())
             }
-            DebugResponse::Error { message } => {
-                Err(DebuggerError::ExecutionError(message).into())
-            }
-            _ => Err(DebuggerError::ExecutionError(
-                "Unexpected response to Reconnect".to_string(),
-            )
-            .into()),
+            DebugResponse::Error { message } => Err(DebuggerError::ExecutionError(message).into()),
+            _ => Err(
+                DebuggerError::ExecutionError("Unexpected response to Reconnect".to_string())
+                    .into(),
+            ),
         }
     }
 

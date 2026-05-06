@@ -119,7 +119,7 @@ impl ReplSession {
     pub fn new(config: ReplConfig) -> Result<Self> {
         let global_config = crate::config::Config::load_or_default();
         let save_history = global_config.repl.save_history.unwrap_or(true);
-        
+
         let history_path = if let Some(path) = global_config.repl.history_file {
             PathBuf::from(path)
         } else {
@@ -310,7 +310,10 @@ impl ReplSession {
                 Ok(false)
             }
             ReplCommand::Palette => {
-                tracing::info!("{}", Formatter::info("Command palette opened. Type an action to run:"));
+                tracing::info!(
+                    "{}",
+                    Formatter::info("Command palette opened. Type an action to run:")
+                );
                 tracing::info!("  export-trace");
                 tracing::info!("  add-breakpoint");
                 tracing::info!("  diagnostics");

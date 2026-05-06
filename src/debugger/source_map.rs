@@ -898,47 +898,6 @@ mod tests {
         bytes
     }
 
-    fn push_section(bytes: &mut Vec<u8>, section_id: u8, payload: &[u8]) {
-        bytes.push(section_id);
-        bytes.extend_from_slice(&uleb128(payload.len()));
-        bytes.extend_from_slice(payload);
-    }
-
-    fn wasm_with_functions_and_exports(exports: &[(&str, u32)], function_count: u32) -> Vec<u8> {
-        let mut bytes = vec![0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00];
-
-        let type_section = vec![0x01, 0x60, 0x00, 0x00];
-        push_section(&mut bytes, 0x01, &type_section);
-
-        let mut function_section = Vec::new();
-        function_section.extend_from_slice(&uleb128(function_count as usize));
-        function_section.extend(std::iter::repeat_n(0x00, function_count as usize));
-        push_section(&mut bytes, 0x03, &function_section);
-
-        if !exports.is_empty() {
-            let mut export_section = Vec::new();
-            export_section.extend_from_slice(&uleb128(exports.len()));
-            for (name, function_index) in exports {
-                export_section.extend_from_slice(&uleb128(name.len()));
-                export_section.extend_from_slice(name.as_bytes());
-                export_section.push(0x00);
-                export_section.extend_from_slice(&uleb128(*function_index as usize));
-            }
-            push_section(&mut bytes, 0x07, &export_section);
-        }
-
-        let mut code_section = Vec::new();
-        code_section.extend_from_slice(&uleb128(function_count as usize));
-        for _ in 0..function_count {
-            code_section.push(0x02);
-            code_section.push(0x00);
-            code_section.push(0x0b);
-        }
-        push_section(&mut bytes, 0x0a, &code_section);
-
-        bytes
-    }
-
     #[test]
     fn normalize_wasm_offsets_keeps_alternate_for_ambiguous_addresses() {
         let sm = SourceMap {

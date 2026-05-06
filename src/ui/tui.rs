@@ -1,6 +1,6 @@
 use crate::debugger::engine::DebuggerEngine;
-use crate::inspector::{StorageInspector, storage::StorageQuery};
 use crate::inspector::BudgetInspector;
+use crate::inspector::{storage::StorageQuery, StorageInspector};
 use crate::Result;
 use std::io::{self, Write};
 
@@ -458,7 +458,7 @@ impl DebuggerUI {
 
     fn print_help(&self) {
         let kb = &self.config.keybindings;
-        
+
         crate::logging::log_display(
             "Interactive debugger commands:",
             crate::logging::LogLevel::Info,

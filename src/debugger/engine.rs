@@ -593,7 +593,10 @@ impl DebuggerEngine {
     }
 
     pub fn pause_reason(&self) -> Option<PauseReason> {
-        self.state.lock().ok().and_then(|state| state.pause_reason())
+        self.state
+            .lock()
+            .ok()
+            .and_then(|state| state.pause_reason())
     }
 
     pub fn pause_reason_label(&self) -> Option<&'static str> {

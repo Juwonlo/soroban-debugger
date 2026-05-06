@@ -200,8 +200,13 @@ impl PluginReloadReport {
     pub fn summary_line(&self) -> String {
         match self.outcome {
             PluginReloadOutcome::Success => {
-                let size = self.preserved_state_bytes.map_or("unknown".to_string(), |b| format!("{} bytes", b));
-                format!("Plugin '{}' reloaded successfully. Preserved state: {}.", self.plugin, size)
+                let size = self
+                    .preserved_state_bytes
+                    .map_or("unknown".to_string(), |b| format!("{} bytes", b));
+                format!(
+                    "Plugin '{}' reloaded successfully. Preserved state: {}.",
+                    self.plugin, size
+                )
             }
             PluginReloadOutcome::Failed => {
                 let reason = self.reason.as_deref().unwrap_or("unknown error");
@@ -209,7 +214,10 @@ impl PluginReloadReport {
             }
             PluginReloadOutcome::RolledBack => {
                 let reason = self.reason.as_deref().unwrap_or("unknown error");
-                format!("Plugin '{}' reload rolled back. Reason: {}.", self.plugin, reason)
+                format!(
+                    "Plugin '{}' reload rolled back. Reason: {}.",
+                    self.plugin, reason
+                )
             }
         }
     }

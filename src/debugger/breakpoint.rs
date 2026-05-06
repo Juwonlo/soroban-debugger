@@ -965,10 +965,7 @@ mod tests {
         let mut evaluator = MockEvaluator::new();
         evaluator.set("balance", 1500);
 
-        let bp = Breakpoint::log_point(
-            "transfer".to_string(),
-            "Transfer executed".to_string(),
-        );
+        let bp = Breakpoint::log_point("transfer".to_string(), "Transfer executed".to_string());
         manager.set(bp);
 
         let (should_break, log) = manager
@@ -997,9 +994,6 @@ mod tests {
             .unwrap();
 
         assert!(!should_break, "Log points should not pause execution");
-        assert_eq!(
-            log,
-            Some("Transfer 100 from balance 1500".to_string())
-        );
+        assert_eq!(log, Some("Transfer 100 from balance 1500".to_string()));
     }
 }

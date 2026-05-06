@@ -83,12 +83,8 @@ fn test_source_map_multiple_files() {
 fn test_no_debug_info_reason_code() {
     let sm = SourceMap::new();
     let exported: HashSet<String> = HashSet::new();
-    let results = sm.resolve_source_breakpoints(
-        MINIMAL_WASM,
-        &PathBuf::from("src/lib.rs"),
-        &[5],
-        None,
-    );
+    let results =
+        sm.resolve_source_breakpoints(MINIMAL_WASM, &PathBuf::from("src/lib.rs"), &[5], None);
     assert_eq!(results.len(), 1);
     assert_eq!(results[0].reason_code, "NO_DEBUG_INFO");
     assert!(!results[0].verified);
@@ -110,12 +106,8 @@ fn test_file_not_in_debug_info_reason_code() {
         },
     );
     let exported: HashSet<String> = HashSet::new();
-    let results = sm.resolve_source_breakpoints(
-        MINIMAL_WASM,
-        &PathBuf::from("src/lib.rs"),
-        &[5],
-        None,
-    );
+    let results =
+        sm.resolve_source_breakpoints(MINIMAL_WASM, &PathBuf::from("src/lib.rs"), &[5], None);
     assert_eq!(results.len(), 1);
     assert_eq!(results[0].reason_code, "FILE_NOT_IN_DEBUG_INFO");
     assert!(!results[0].verified);
@@ -169,8 +161,7 @@ fn test_resolve_source_breakpoints_with_custom_max_forward() {
     assert_eq!(results_default[0].reason_code, "NO_CODE_AT_LINE");
 
     // With custom limit 30, it SHOULD be found.
-    let results_custom =
-        sm.resolve_source_breakpoints(MINIMAL_WASM, &source_file, &[25], Some(30));
+    let results_custom = sm.resolve_source_breakpoints(MINIMAL_WASM, &source_file, &[25], Some(30));
     // It will be found but might fail later because MINIMAL_WASM has no functions,
     // so it will hit Candidate Entrypoints is empty -> UNMAPPABLE or NOT_EXPORTED.
     // But it should NOT be NO_CODE_AT_LINE.

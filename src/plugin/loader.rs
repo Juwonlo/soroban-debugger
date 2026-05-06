@@ -354,7 +354,9 @@ impl PluginLoader {
         library_bytes: &[u8],
     ) -> PluginResult<PluginTrustAssessment> {
         // Enforce sandbox policy on plugin capabilities BEFORE trust checks
-        if !self.sandbox_policy.allow_command_registration && manifest.capabilities.provides_commands {
+        if !self.sandbox_policy.allow_command_registration
+            && manifest.capabilities.provides_commands
+        {
             return Err(PluginError::SandboxViolation(format!(
                 "Plugin '{}' requires command registration which is disabled by the current sandbox policy.",
                 manifest.name
@@ -704,7 +706,7 @@ mod tests {
     fn sandbox_policy_blocks_command_registration() {
         let mut sandbox = PluginSandboxPolicy::default();
         sandbox.allow_command_registration = false;
-        
+
         let loader = PluginLoader::with_policies(
             std::env::temp_dir(),
             PluginTrustPolicy::default(),
@@ -718,6 +720,8 @@ mod tests {
             .assess_trust(&manifest, Path::new("command-plugin.so"), b"library")
             .unwrap_err();
 
-        assert!(matches!(err, PluginError::SandboxViolation(msg) if msg.contains("command registration which is disabled")));
+        assert!(
+            matches!(err, PluginError::SandboxViolation(msg) if msg.contains("command registration which is disabled"))
+        );
     }
 }

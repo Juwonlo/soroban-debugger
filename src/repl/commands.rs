@@ -63,8 +63,10 @@ impl ReplCommand {
         match self {
             ReplCommand::Call { args, .. } => args.iter().any(|arg| {
                 let lower = arg.to_lowercase();
-                lower.contains("secret") || lower.contains("token") 
-                    || lower.contains("key") || lower.contains("password")
+                lower.contains("secret")
+                    || lower.contains("token")
+                    || lower.contains("key")
+                    || lower.contains("password")
             }),
             _ => false,
         }

@@ -11,11 +11,13 @@
 
 use crate::debugger::engine::DebuggerEngine;
 use crate::inspector::budget::BudgetInfo;
-use crate::inspector::storage::{StorageInspector, StorageQuery};
 use crate::inspector::stack::CallFrame;
+use crate::inspector::storage::{StorageInspector, StorageQuery};
 use crate::{DebuggerError, Result};
 use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEvent, KeyModifiers},
+    event::{
+        self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEvent, KeyModifiers,
+    },
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -438,7 +440,8 @@ impl DashboardApp {
         } else {
             self.storage_selected.min(filtered_len.saturating_sub(1))
         };
-        self.storage_state.select((filtered_len > 0).then_some(self.storage_selected));
+        self.storage_state
+            .select((filtered_len > 0).then_some(self.storage_selected));
     }
 
     fn sync_storage_scroll_state(&mut self) {
@@ -458,8 +461,8 @@ impl DashboardApp {
         } else if delta.is_negative() {
             self.storage_selected = self.storage_selected.saturating_sub(delta.unsigned_abs());
         } else {
-            self.storage_selected = (self.storage_selected + delta as usize)
-                .min(filtered_len.saturating_sub(1));
+            self.storage_selected =
+                (self.storage_selected + delta as usize).min(filtered_len.saturating_sub(1));
         }
         self.sync_storage_scroll_state();
     }
@@ -1214,12 +1217,18 @@ fn render_storage(f: &mut Frame, app: &mut DashboardApp, area: Rect) {
     } else {
         format!(
             "  filter={}  /=edit  g=jump  PgUp/PgDn=page  x=clear",
-            truncate(&app.storage_filter, sections[0].width.saturating_sub(10) as usize)
+            truncate(
+                &app.storage_filter,
+                sections[0].width.saturating_sub(10) as usize
+            )
         )
     };
     let meta = Paragraph::new(vec![
         Line::from(Span::styled(summary, Style::default().fg(COLOR_TEXT_DIM))),
-        Line::from(Span::styled(filter_line, Style::default().fg(COLOR_TEXT_DIM))),
+        Line::from(Span::styled(
+            filter_line,
+            Style::default().fg(COLOR_TEXT_DIM),
+        )),
     ])
     .style(Style::default().bg(COLOR_SURFACE));
     f.render_widget(meta, sections[0]);
