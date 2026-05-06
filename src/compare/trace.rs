@@ -144,6 +144,7 @@ impl ExecutionTrace {
                 kind: crate::output::ReplayArtifactKind::Trace,
                 path: trace_path.display().to_string(),
                 description: Some("Primary execution trace used for replay".to_string()),
+                compression: None,
             }],
         }
     }

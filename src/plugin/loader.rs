@@ -92,6 +92,9 @@ pub struct PluginLoader {
 
     /// Trust policy used before dynamic loading
     trust_policy: PluginTrustPolicy,
+
+    /// Sandbox policy applied before enabling plugin capabilities.
+    sandbox_policy: PluginSandboxPolicy,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -107,6 +110,19 @@ pub struct PluginTrustPolicy {
     pub allowlist: BTreeSet<String>,
     pub denylist: BTreeSet<String>,
     pub allowed_signers: BTreeSet<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PluginSandboxPolicy {
+    pub allow_command_registration: bool,
+}
+
+impl Default for PluginSandboxPolicy {
+    fn default() -> Self {
+        Self {
+            allow_command_registration: true,
+        }
+    }
 }
 
 impl Default for PluginTrustPolicy {
@@ -151,9 +167,18 @@ impl PluginLoader {
 
     /// Create a new plugin loader with an explicit trust policy
     pub fn with_trust_policy(plugin_dir: PathBuf, trust_policy: PluginTrustPolicy) -> Self {
+        Self::with_policies(plugin_dir, trust_policy, PluginSandboxPolicy::default())
+    }
+
+    pub fn with_policies(
+        plugin_dir: PathBuf,
+        trust_policy: PluginTrustPolicy,
+        sandbox_policy: PluginSandboxPolicy,
+    ) -> Self {
         Self {
             plugin_dir,
             trust_policy,
+            sandbox_policy,
         }
     }
 
@@ -484,6 +509,7 @@ mod tests {
 
     fn base_manifest(name: &str) -> PluginManifest {
         PluginManifest {
+            schema_version: crate::plugin::manifest::MANIFEST_SCHEMA_VERSION.to_string(),
             name: name.to_string(),
             version: "1.0.0".to_string(),
             description: "test plugin".to_string(),

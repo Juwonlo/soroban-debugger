@@ -33,6 +33,8 @@ pub enum ReplCommand {
     ClearBreak {
         function: String,
     },
+    /// Open the command palette
+    Palette,
     Functions,
 }
 
@@ -50,6 +52,7 @@ impl ReplCommand {
             "break",
             "list-breaks",
             "clear-break",
+            "palette",
             "functions",
         ]
     }
@@ -111,6 +114,7 @@ impl ReplCommand {
             }
             "storage" => Ok(ReplCommand::Storage),
             "history" => Ok(ReplCommand::History),
+            "palette" => Ok(ReplCommand::Palette),
             "functions" => Ok(ReplCommand::Functions),
             "clear" => Ok(ReplCommand::Clear),
             "help" => Ok(ReplCommand::Help),

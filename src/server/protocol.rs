@@ -287,18 +287,16 @@ pub enum DebugResponse {
         protocol_min: u32,
         protocol_max: u32,
         selected_version: u32,
-        session_id: String,
-        session_created_at: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        session_id: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        session_created_at: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         session_label: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         heartbeat_interval_ms: Option<u32>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         idle_timeout_ms: Option<u32>,
-        /// Opaque session identifier the client can use to reconnect after a
-        /// transient disconnect. Absent on servers that do not support reconnection.
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        session_id: Option<String>,
     },
 
     /// Handshake failed due to protocol mismatch.
@@ -386,6 +384,18 @@ pub enum DebugResponse {
 
     /// Breakpoint cleared
     BreakpointCleared { id: String },
+
+    /// Existing session was reattached successfully.
+    ReconnectAck {
+        session_id: String,
+        paused: bool,
+        current_function: Option<String>,
+        breakpoints: Vec<String>,
+        step_count: u64,
+    },
+
+    /// Requested reconnection target is no longer available.
+    SessionExpired { message: String },
 
     /// List of breakpoints
     BreakpointsList {

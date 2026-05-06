@@ -300,9 +300,13 @@ fn run_instruction_stepping(
             .map_err(|e| DebuggerError::IoError(format!("Failed to flush stdout: {}", e)))?;
 
         let mut input = String::new();
-        std::io::stdin()
+        let bytes_read = std::io::stdin()
             .read_line(&mut input)
             .map_err(|e| DebuggerError::IoError(format!("Failed to read line: {}", e)))?;
+        if bytes_read == 0 {
+            logging::log_display("Input stream closed.", logging::LogLevel::Info);
+            break;
+        }
 
         let input = input.trim().to_lowercase();
         let cmd = input.as_str();
@@ -979,8 +983,9 @@ pub fn run(args: RunArgs, verbosity: Verbosity) -> Result<()> {
             .as_ref()
             .map(|a| serde_json::to_string(a).unwrap_or_default());
 
-        let trace_events =
-            json_events.unwrap_or_else(|| engine.executor().get_events().unwrap_or_default());
+        let trace_events = json_events
+            .clone()
+            .unwrap_or_else(|| engine.executor().get_events().unwrap_or_default());
 
         let trace = build_execution_trace(
             function,
@@ -988,7 +993,7 @@ pub fn run(args: RunArgs, verbosity: Verbosity) -> Result<()> {
             args_str,
             &storage_after,
             &result,
-            budget,
+            budget.clone(),
             engine.executor(),
             &trace_events,
             usize::MAX,
@@ -1192,11 +1197,13 @@ fn export_replay_artifact_manifest(
         kind: crate::output::ReplayArtifactKind::Manifest,
         path: manifest_path.display().to_string(),
         description: Some("Replay artifact manifest".to_string()),
+        compression: None,
     });
     manifest.files.push(crate::output::ReplayArtifactFile {
         kind: crate::output::ReplayArtifactKind::ContractWasm,
         path: contract_path.display().to_string(),
         description: Some("Contract WASM used to generate the trace".to_string()),
+        compression: None,
     });
 
     if let Some(path) = &args.network_snapshot {
@@ -1204,6 +1211,7 @@ fn export_replay_artifact_manifest(
             kind: crate::output::ReplayArtifactKind::NetworkSnapshot,
             path: path.display().to_string(),
             description: Some("Network snapshot loaded before execution".to_string()),
+            compression: None,
         });
     }
     if let Some(path) = &args.import_storage {
@@ -1211,6 +1219,7 @@ fn export_replay_artifact_manifest(
             kind: crate::output::ReplayArtifactKind::StorageImport,
             path: path.display().to_string(),
             description: Some("Imported storage seed used before execution".to_string()),
+            compression: None,
         });
     }
     if let Some(path) = &args.export_storage {
@@ -1218,6 +1227,7 @@ fn export_replay_artifact_manifest(
             kind: crate::output::ReplayArtifactKind::StorageExport,
             path: path.display().to_string(),
             description: Some("Exported storage state captured after execution".to_string()),
+            compression: None,
         });
     }
     if let Some(path) = &args.save_output {
@@ -1225,6 +1235,7 @@ fn export_replay_artifact_manifest(
             kind: crate::output::ReplayArtifactKind::OutputReport,
             path: path.display().to_string(),
             description: Some("Saved command output for this run".to_string()),
+            compression: None,
         });
     }
     if let Some(path) = &args.generate_test {
@@ -1232,6 +1243,7 @@ fn export_replay_artifact_manifest(
             kind: crate::output::ReplayArtifactKind::GeneratedTest,
             path: path.display().to_string(),
             description: Some("Generated reproduction test derived from the trace".to_string()),
+            compression: None,
         });
     }
 
@@ -2929,6 +2941,91 @@ pub fn history_prune(args: HistoryPruneArgs) -> Result<()> {
             );
         }
     }
+    Ok(())
+}
+
+pub fn doctor(args: crate::cli::args::DoctorArgs) -> Result<()> {
+    let history_path = compute_default_history_path()
+        .unwrap_or_else(|_| std::env::temp_dir().join("soroban-debug-history.json"));
+
+    let remote = if let Some(addr) = args.remote.as_ref() {
+        let config = crate::client::remote_client::RemoteClientConfig {
+            connect_timeout: std::time::Duration::from_millis(args.timeout_ms),
+            timeouts: crate::client::remote_client::RemoteClientConfig::build_timeouts(
+                args.timeout_ms,
+                Some(args.timeout_ms),
+                Some(args.timeout_ms),
+            ),
+            ..crate::client::remote_client::RemoteClientConfig::default()
+        };
+
+        match crate::client::remote_client::RemoteClient::connect_with_config(
+            addr,
+            args.token.clone(),
+            config,
+        ) {
+            Ok(mut client) => {
+                let ping = match client.ping() {
+                    Ok(_) => Some(check_ok("Ping succeeded")),
+                    Err(e) => Some(check_err(format!("Ping failed: {}", e))),
+                };
+                Some(RemoteDoctorReport {
+                    address: addr.clone(),
+                    connect: check_ok(format!("Connected to {}", addr)),
+                    handshake: Some(check_ok("Handshake succeeded")),
+                    ping,
+                    auth: args.token.as_ref().map(|_| check_ok("Authentication succeeded")),
+                    selected_protocol: None,
+                })
+            }
+            Err(e) => Some(RemoteDoctorReport {
+                address: addr.clone(),
+                connect: check_err(format!("Connection failed: {}", e)),
+                handshake: None,
+                ping: None,
+                auth: None,
+                selected_protocol: None,
+            }),
+        }
+    } else {
+        None
+    };
+
+    let report = DoctorReport {
+        binary: binary_status(),
+        config: config_status(),
+        history: history_file_status(&history_path),
+        plugins: plugin_status(),
+        protocol: protocol_status(),
+        remote,
+        vscode_extension: vscode_extension_status(args.vscode_manifest.as_ref()),
+    };
+
+    if args.format == OutputFormat::Json {
+        let json = serde_json::to_string_pretty(&report)
+            .map_err(|e| miette::miette!("Failed to serialize doctor report: {}", e))?;
+        println!("{}", json);
+        return Ok(());
+    }
+
+    println!("Binary: {}", report.binary);
+    println!("Config: {}", report.config);
+    println!("History: {}", report.history);
+    println!("Plugins: {}", report.plugins);
+    println!("Protocol: {}", report.protocol);
+    if let Some(remote) = report.remote {
+        println!("Remote connect: {}", remote.connect.message);
+        if let Some(handshake) = remote.handshake {
+            println!("Remote handshake: {}", handshake.message);
+        }
+        if let Some(ping) = remote.ping {
+            println!("Remote ping: {}", ping.message);
+        }
+        if let Some(auth) = remote.auth {
+            println!("Remote auth: {}", auth.message);
+        }
+    }
+    println!("VS Code extension: {}", report.vscode_extension);
     Ok(())
 }
 

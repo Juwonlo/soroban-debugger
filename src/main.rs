@@ -196,6 +196,7 @@ fn main() -> miette::Result<()> {
         Some(Commands::Scenario(args)) => {
             soroban_debugger::cli::commands::scenario(args, verbosity)
         }
+        Some(Commands::Doctor(args)) => soroban_debugger::cli::commands::doctor(args),
         Some(Commands::HistoryPrune(args)) => soroban_debugger::cli::commands::history_prune(args),
         Some(Commands::Repl(mut args)) => {
             args.merge_config(&config);

@@ -296,7 +296,10 @@ impl DebuggerEngine {
 
         if check_breakpoints {
             let evaluator = self.create_condition_evaluator();
-            match self.breakpoints.should_break_with_context(function, &evaluator) {
+            match self
+                .breakpoints
+                .should_break_with_context(function, evaluator.as_ref())
+            {
                 Ok((should_pause, log_message)) => {
                     if let Some(msg) = log_message {
                         // Log point hit - output message but don't pause
