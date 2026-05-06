@@ -65,6 +65,7 @@ struct SessionContext {
 }
 
 impl DebugServer {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         host: String,
         token: Option<String>,
@@ -532,7 +533,7 @@ impl DebugServer {
                     self.reconnection_log.record(
                         &self.session_id,
                         instant.elapsed(),
-                        self.engine.as_ref().map_or(false, |e| e.is_paused()),
+                        self.engine.as_ref().is_some_and(|e| e.is_paused()),
                     );
                 }
                 info!("Client reconnected to session {}", self.session_id);

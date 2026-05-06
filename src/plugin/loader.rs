@@ -704,8 +704,9 @@ mod tests {
 
     #[test]
     fn sandbox_policy_blocks_command_registration() {
-        let mut sandbox = PluginSandboxPolicy::default();
-        sandbox.allow_command_registration = false;
+        let sandbox = PluginSandboxPolicy {
+            allow_command_registration: false,
+        };
 
         let loader = PluginLoader::with_policies(
             std::env::temp_dir(),

@@ -1,5 +1,4 @@
 use soroban_debugger::debugger::source_map::{SourceLocation, SourceMap};
-use std::collections::HashSet;
 use std::path::PathBuf;
 
 // Minimal valid WASM module (magic + version, no sections).
@@ -82,7 +81,6 @@ fn test_source_map_multiple_files() {
 #[test]
 fn test_no_debug_info_reason_code() {
     let sm = SourceMap::new();
-    let exported: HashSet<String> = HashSet::new();
     let results =
         sm.resolve_source_breakpoints(MINIMAL_WASM, &PathBuf::from("src/lib.rs"), &[5], None);
     assert_eq!(results.len(), 1);
@@ -105,7 +103,6 @@ fn test_file_not_in_debug_info_reason_code() {
             column: None,
         },
     );
-    let exported: HashSet<String> = HashSet::new();
     let results =
         sm.resolve_source_breakpoints(MINIMAL_WASM, &PathBuf::from("src/lib.rs"), &[5], None);
     assert_eq!(results.len(), 1);
@@ -128,7 +125,6 @@ fn test_no_code_at_line_reason_code() {
             column: None,
         },
     );
-    let exported: HashSet<String> = HashSet::new();
     let results = sm.resolve_source_breakpoints(MINIMAL_WASM, &source_file, &[99], None);
     assert_eq!(results.len(), 1);
     assert_eq!(results[0].reason_code, "NO_CODE_AT_LINE");
@@ -151,8 +147,6 @@ fn test_resolve_source_breakpoints_with_custom_max_forward() {
             column: None,
         },
     );
-
-    let exported: HashSet<String> = HashSet::new();
 
     // Default limit is 20.
     // Requesting line 25, mapping is at 50 (diff 25).

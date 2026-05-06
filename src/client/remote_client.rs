@@ -61,6 +61,8 @@ pub struct RemoteClientConfig {
     pub session_label: Option<String>,
 }
 
+pub type InspectResult = (Option<String>, u64, bool, Vec<String>, Option<String>);
+
 impl Default for RemoteClientConfig {
     fn default() -> Self {
         Self {
@@ -546,7 +548,7 @@ impl RemoteClient {
     }
 
     /// Inspect current state
-    pub fn inspect(&mut self) -> Result<(Option<String>, u64, bool, Vec<String>, Option<String>)> {
+    pub fn inspect(&mut self) -> Result<InspectResult> {
         let response =
             self.send_request_with_retry(DebugRequest::Inspect, RequestClass::Inspect, true)?;
 

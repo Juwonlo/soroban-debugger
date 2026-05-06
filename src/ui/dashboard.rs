@@ -538,10 +538,8 @@ impl DashboardApp {
             KeyCode::Backspace => {
                 self.storage_input_value.pop();
             }
-            KeyCode::Char(c) => {
-                if !key.modifiers.contains(KeyModifiers::CONTROL) {
-                    self.storage_input_value.push(c);
-                }
+            KeyCode::Char(c) if !key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.storage_input_value.push(c);
             }
             _ => {}
         }
@@ -797,40 +795,26 @@ fn run_app<B: ratatui::backend::Backend>(
                     }
 
                     // ── Debugger actions ──────────────────────────
-                    KeyCode::PageDown => {
-                        if app.active_pane == ActivePane::Storage {
-                            app.move_storage_page(1);
-                        }
+                    KeyCode::PageDown if app.active_pane == ActivePane::Storage => {
+                        app.move_storage_page(1);
                     }
-                    KeyCode::PageUp => {
-                        if app.active_pane == ActivePane::Storage {
-                            app.move_storage_page(-1);
-                        }
+                    KeyCode::PageUp if app.active_pane == ActivePane::Storage => {
+                        app.move_storage_page(-1);
                     }
-                    KeyCode::Home => {
-                        if app.active_pane == ActivePane::Storage {
-                            app.move_storage_to_boundary(false);
-                        }
+                    KeyCode::Home if app.active_pane == ActivePane::Storage => {
+                        app.move_storage_to_boundary(false);
                     }
-                    KeyCode::End => {
-                        if app.active_pane == ActivePane::Storage {
-                            app.move_storage_to_boundary(true);
-                        }
+                    KeyCode::End if app.active_pane == ActivePane::Storage => {
+                        app.move_storage_to_boundary(true);
                     }
-                    KeyCode::Char('/') => {
-                        if app.active_pane == ActivePane::Storage {
-                            app.open_storage_input(StorageInputMode::Filter);
-                        }
+                    KeyCode::Char('/') if app.active_pane == ActivePane::Storage => {
+                        app.open_storage_input(StorageInputMode::Filter);
                     }
-                    KeyCode::Char('g') => {
-                        if app.active_pane == ActivePane::Storage {
-                            app.open_storage_input(StorageInputMode::Jump);
-                        }
+                    KeyCode::Char('g') if app.active_pane == ActivePane::Storage => {
+                        app.open_storage_input(StorageInputMode::Jump);
                     }
-                    KeyCode::Char('x') | KeyCode::Esc => {
-                        if app.active_pane == ActivePane::Storage {
-                            app.clear_storage_filter();
-                        }
+                    KeyCode::Char('x') | KeyCode::Esc if app.active_pane == ActivePane::Storage => {
+                        app.clear_storage_filter();
                     }
                     KeyCode::Char('s') | KeyCode::Char('S') => {
                         app.do_step();

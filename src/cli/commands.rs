@@ -2704,11 +2704,7 @@ fn history_file_status(path: &PathBuf) -> serde_json::Value {
     let size = metadata.as_ref().map(|m| m.len());
 
     let readable = std::fs::File::open(path).is_ok();
-    let writable = std::fs::OpenOptions::new()
-        .write(true)
-        .append(true)
-        .open(path)
-        .is_ok();
+    let writable = std::fs::OpenOptions::new().append(true).open(path).is_ok();
 
     serde_json::json!({
         "path": path,

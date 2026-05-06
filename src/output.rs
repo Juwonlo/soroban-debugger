@@ -579,6 +579,42 @@ impl OutputWriter {
     }
 }
 
+/// Formats a resource usage timeline as a human-readable table.
+pub fn format_resource_timeline(
+    timeline: &[crate::inspector::budget::ResourceCheckpoint],
+) -> String {
+    let mut output = String::new();
+    let mut last_cpu = 0;
+    let mut last_mem = 0;
+
+    output.push_str("| Time | Location | Total CPU | CPU Delta | Total Mem | Mem Delta |\n");
+    output.push_str("|------|----------|-----------|-----------|-----------|-----------|\n");
+
+    for checkpoint in timeline {
+        let cpu_delta = checkpoint.cpu_instructions.saturating_sub(last_cpu);
+        let mem_delta = checkpoint.memory_bytes.saturating_sub(last_mem);
+
+        let _ = writeln!(
+            output,
+            "| {: >4}ms | {: <8} | {: >9} | {: >9} | {: >9} | {: >9} |",
+            checkpoint.timestamp_ms,
+            if checkpoint.location_name.len() > 8 {
+                &checkpoint.location_name[..8]
+            } else {
+                &checkpoint.location_name
+            },
+            checkpoint.cpu_instructions,
+            cpu_delta,
+            checkpoint.memory_bytes,
+            mem_delta
+        );
+
+        last_cpu = checkpoint.cpu_instructions;
+        last_mem = checkpoint.memory_bytes;
+    }
+    output
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -647,40 +683,4 @@ mod tests {
         assert!(json.contains("metadata"));
         assert!(json.contains("contract.wasm"));
     }
-}
-
-/// Formats a resource usage timeline as a human-readable table.
-pub fn format_resource_timeline(
-    timeline: &[crate::inspector::budget::ResourceCheckpoint],
-) -> String {
-    let mut output = String::new();
-    let mut last_cpu = 0;
-    let mut last_mem = 0;
-
-    output.push_str("| Time | Location | Total CPU | CPU Delta | Total Mem | Mem Delta |\n");
-    output.push_str("|------|----------|-----------|-----------|-----------|-----------|\n");
-
-    for checkpoint in timeline {
-        let cpu_delta = checkpoint.cpu_instructions.saturating_sub(last_cpu);
-        let mem_delta = checkpoint.memory_bytes.saturating_sub(last_mem);
-
-        let _ = writeln!(
-            output,
-            "| {: >4}ms | {: <8} | {: >9} | {: >9} | {: >9} | {: >9} |",
-            checkpoint.timestamp_ms,
-            if checkpoint.location_name.len() > 8 {
-                &checkpoint.location_name[..8]
-            } else {
-                &checkpoint.location_name
-            },
-            checkpoint.cpu_instructions,
-            cpu_delta,
-            checkpoint.memory_bytes,
-            mem_delta
-        );
-
-        last_cpu = checkpoint.cpu_instructions;
-        last_mem = checkpoint.memory_bytes;
-    }
-    output
 }
