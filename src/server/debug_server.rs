@@ -14,12 +14,10 @@ use crate::server::protocol::{
 use crate::simulator::SnapshotLoader;
 use crate::Result;
 use chrono::Utc;
-use std::collections::HashSet;
 use std::fs;
 use std::io::BufReader as StdBufReader;
 use std::path::Path;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::io::AsyncBufReadExt;
 use tokio::net::TcpListener;
 use tokio::sync::Notify;
@@ -65,8 +63,6 @@ struct PendingExecution {
 struct SessionContext {
     info: RemoteSessionInfo,
 }
-
-static SESSION_COUNTER: AtomicU64 = AtomicU64::new(1);
 
 impl DebugServer {
     pub fn new(

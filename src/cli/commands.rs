@@ -2654,10 +2654,6 @@ struct DoctorReport {
     vscode_extension: serde_json::Value,
 }
 
-fn json_kv(key: &str, value: impl serde::Serialize) -> serde_json::Value {
-    serde_json::json!({ key: value })[key].clone()
-}
-
 fn check_ok(message: impl Into<String>) -> DoctorCheck {
     DoctorCheck {
         ok: true,

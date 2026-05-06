@@ -627,7 +627,7 @@ impl SourceMap {
                 let mut resolved_line = *requested_line;
                 let mut adjusted = false;
 
-                let offsets = if let Some(offsets) = line_to_offsets.get(requested_line) {
+                let _offsets = if let Some(offsets) = line_to_offsets.get(requested_line) {
                     offsets.as_slice()
                 } else {
                     let mut found: Option<(u32, &Vec<usize>)> = None;
@@ -704,7 +704,6 @@ fn dwarf_section_sizes(wasm_bytes: &[u8]) -> Result<HashMap<String, usize>> {
 #[derive(Debug, Clone)]
 struct WasmIndex {
     function_bodies: Vec<(std::ops::Range<usize>, u32)>,
-    exports_by_function: HashMap<u32, Vec<String>>,
     function_by_export: HashMap<String, u32>,
 }
 
@@ -713,7 +712,6 @@ impl WasmIndex {
         let mut imported_func_count = 0u32;
         let mut local_function_index = 0u32;
         let mut function_bodies: Vec<(std::ops::Range<usize>, u32)> = Vec::new();
-        let mut exports_by_function: HashMap<u32, Vec<String>> = HashMap::new();
         let mut function_by_export: HashMap<String, u32> = HashMap::new();
 
         for payload in Parser::new(0).parse_all(wasm_bytes) {
@@ -739,10 +737,6 @@ impl WasmIndex {
                         })?;
                         if matches!(export.kind, wasmparser::ExternalKind::Func) {
                             let func_index = export.index;
-                            exports_by_function
-                                .entry(func_index)
-                                .or_default()
-                                .push(export.name.to_string());
                             // Prefer first name if multiple exports point at same index.
                             function_by_export
                                 .entry(export.name.to_string())
@@ -764,38 +758,12 @@ impl WasmIndex {
 
         Ok(Self {
             function_bodies,
-            exports_by_function,
             function_by_export,
         })
     }
 
     fn function_index_for_export(&self, export_name: &str) -> Option<u32> {
         self.function_by_export.get(export_name).copied()
-    }
-
-    fn export_names_for_function(&self, function_index: u32) -> Option<&Vec<String>> {
-        self.exports_by_function.get(&function_index)
-    }
-
-    fn function_index_for_offset(&self, offset: usize) -> Option<u32> {
-        let bodies = self.function_bodies.as_slice();
-        if bodies.is_empty() {
-            return None;
-        }
-
-        // Find rightmost body with start <= offset.
-        let idx = match bodies.binary_search_by_key(&offset, |(range, _)| range.start) {
-            Ok(i) => i,
-            Err(0) => return None,
-            Err(i) => i - 1,
-        };
-
-        let (range, function_index) = &bodies[idx];
-        if offset >= range.start && offset < range.end {
-            Some(*function_index)
-        } else {
-            None
-        }
     }
 }
 

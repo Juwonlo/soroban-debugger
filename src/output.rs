@@ -5,7 +5,6 @@
 use serde::{Deserialize, Serialize};
 use std::fmt::Write;
 use std::sync::atomic::{AtomicBool, Ordering};
-use crate::inspector::budget::{BudgetInspector, ResourceCheckpoint};
 
 static NO_UNICODE: AtomicBool = AtomicBool::new(false);
 static COLORS_ENABLED: AtomicBool = AtomicBool::new(true);

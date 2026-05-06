@@ -9,7 +9,6 @@ use crate::runtime::executor::ContractExecutor;
 use crate::runtime::instruction::Instruction;
 use crate::runtime::instrumentation::Instrumenter;
 use crate::Result;
-use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use tracing::info;
 
@@ -28,98 +27,6 @@ pub struct DebuggerEngine {
     source_map: Option<SourceMap>,
     paused: bool,
     instruction_debug_enabled: bool,
-}
-
-struct EngineConditionEvaluator {
-    storage: HashMap<String, String>,
-}
-
-impl EngineConditionEvaluator {
-    fn new(storage: HashMap<String, String>) -> Self {
-        Self { storage }
-    }
-
-    fn parse_condition<'a>(
-        &self,
-        condition: &'a str,
-    ) -> crate::Result<(&'a str, &'a str, &'a str)> {
-        let condition = condition.trim();
-        let (var, op, value) = if let Some(pos) = condition.find(">=") {
-            let (var, rest) = condition.split_at(pos);
-            (var.trim(), ">=", rest[2..].trim())
-        } else if let Some(pos) = condition.find("<=") {
-            let (var, rest) = condition.split_at(pos);
-            (var.trim(), "<=", rest[2..].trim())
-        } else if let Some(pos) = condition.find("==") {
-            let (var, rest) = condition.split_at(pos);
-            (var.trim(), "==", rest[2..].trim())
-        } else if let Some(pos) = condition.find("!=") {
-            let (var, rest) = condition.split_at(pos);
-            (var.trim(), "!=", rest[2..].trim())
-        } else if let Some(pos) = condition.find('>') {
-            let (var, rest) = condition.split_at(pos);
-            (var.trim(), ">", rest[1..].trim())
-        } else if let Some(pos) = condition.find('<') {
-            let (var, rest) = condition.split_at(pos);
-            (var.trim(), "<", rest[1..].trim())
-        } else {
-            return Err(crate::DebuggerError::BreakpointError(format!(
-                "No operator found in condition: {}",
-                condition
-            ))
-            .into());
-        };
-
-        Ok((var, op, value))
-    }
-
-    fn normalize_value(value: &str) -> &str {
-        value.trim_matches('"').trim_matches('\'')
-    }
-}
-
-impl ConditionEvaluator for EngineConditionEvaluator {
-    fn evaluate(&self, condition: &str) -> crate::Result<bool> {
-        let (var, op, value_str) = self.parse_condition(condition)?;
-        let actual = self
-            .storage
-            .get(var)
-            .map(String::as_str)
-            .unwrap_or_default()
-            .trim();
-        let actual = Self::normalize_value(actual);
-        let expected = Self::normalize_value(value_str);
-
-        if let (Ok(lhs), Ok(rhs)) = (actual.parse::<f64>(), expected.parse::<f64>()) {
-            return Ok(match op {
-                "==" => lhs == rhs,
-                "!=" => lhs != rhs,
-                ">" => lhs > rhs,
-                "<" => lhs < rhs,
-                ">=" => lhs >= rhs,
-                "<=" => lhs <= rhs,
-                _ => false,
-            });
-        }
-
-        Ok(match op {
-            "==" => actual == expected,
-            "!=" => actual != expected,
-            ">" => actual > expected,
-            "<" => actual < expected,
-            ">=" => actual >= expected,
-            "<=" => actual <= expected,
-            _ => false,
-        })
-    }
-
-    fn interpolate_log(&self, template: &str) -> crate::Result<String> {
-        let mut rendered = template.to_string();
-        for (key, value) in &self.storage {
-            rendered = rendered.replace(&format!("{{{}}}", key), value);
-        }
-        Ok(rendered)
-    }
 }
 
 impl DebuggerEngine {
